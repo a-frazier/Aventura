@@ -84,7 +84,7 @@ class AIService {
 
     // Build extra body for provider-specific options
     const extraBody: Record<string, unknown> = {
-      provider: { order: ['deepseek'], require_parameters: true },
+      provider: { order: ['z-ai'], require_parameters: true },
     };
     if (settings.apiSettings.enableThinking) {
       // Enable extended thinking with a reasonable token budget
@@ -227,7 +227,7 @@ class AIService {
 
     // Build extra body for provider-specific options
     const extraBody: Record<string, unknown> = {
-      provider: { order: ['deepseek'], require_parameters: true },
+      provider: { order: ['z-ai'], require_parameters: true },
     };
     if (settings.apiSettings.enableThinking) {
       // Enable extended thinking with a reasonable token budget

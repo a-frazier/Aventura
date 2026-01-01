@@ -370,10 +370,10 @@ export function getDefaultSystemServicesSettings(): SystemServicesSettings {
 class SettingsStore {
   apiSettings = $state<APISettings>({
     openrouterApiKey: null,
-    defaultModel: 'deepseek/deepseek-v3.2',
+    defaultModel: 'z-ai/glm-4.7',
     temperature: 0.8,
-    maxTokens: 1024,
-    enableThinking: false,
+    maxTokens: 8192,
+    enableThinking: true,
   });
 
   uiSettings = $state<UISettings>({

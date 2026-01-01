@@ -179,7 +179,7 @@ function inferEntryType(name: string, content: string): EntryType {
 
 /**
  * LLM-based entry type classification using grok-4.1-fast with reasoning.
- * Classifies entries in batches for efficiency.
+ * Classifies entries in batches with concurrent requests for faster processing.
  */
 export async function classifyEntriesWithLLM(
   entries: ImportedEntry[],
@@ -195,18 +195,28 @@ export async function classifyEntriesWithLLM(
 
   const provider = new OpenRouterProvider(apiKey);
   const BATCH_SIZE = 50;
+  const MAX_CONCURRENT = 5;
   const classifiedEntries = [...entries];
 
-  log('Starting LLM classification', { totalEntries: entries.length });
+  log('Starting LLM classification', { totalEntries: entries.length, maxConcurrent: MAX_CONCURRENT });
 
+  // Create batches
+  const batches: { startIndex: number; batch: ImportedEntry[]; batchIndex: number }[] = [];
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-    const batch = entries.slice(i, i + BATCH_SIZE);
-    const batchIndex = Math.floor(i / BATCH_SIZE);
+    batches.push({
+      startIndex: i,
+      batch: entries.slice(i, i + BATCH_SIZE),
+      batchIndex: Math.floor(i / BATCH_SIZE),
+    });
+  }
+
+  // Process a single batch
+  async function processBatch(batchInfo: { startIndex: number; batch: ImportedEntry[]; batchIndex: number }): Promise<void> {
+    const { startIndex, batch, batchIndex } = batchInfo;
 
     try {
-      // Build the prompt for this batch
       const entriesForPrompt = batch.map((entry, idx) => ({
-        index: i + idx,
+        index: startIndex + idx,
         name: entry.name,
         content: entry.description,
         keywords: entry.keywords,
@@ -240,13 +250,12 @@ Respond with ONLY valid JSON in this exact format:
         temperature: 0.1,
         maxTokens: 1000,
         extraBody: {
-          reasoning: { effort: 'none' },
+          reasoning: { effort: 'high' },
         },
       });
 
       // Parse the response
       try {
-        // Extract JSON from response (handle potential markdown code blocks)
         let jsonStr = response.content.trim();
         if (jsonStr.startsWith('```')) {
           jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
@@ -275,18 +284,29 @@ Respond with ONLY valid JSON in this exact format:
         });
       } catch (parseError) {
         log('Failed to parse LLM classification response:', parseError);
-        // Keep original keyword-based types for this batch
       }
-
-      // Report progress
-      if (onProgress) {
-        onProgress(Math.min(i + BATCH_SIZE, entries.length), entries.length);
-      }
-
     } catch (error) {
       log('LLM classification batch failed:', error);
-      // Keep original keyword-based types for this batch
     }
+  }
+
+  // Process batches with concurrency limit
+  let completedCount = 0;
+  const totalBatches = batches.length;
+
+  // Process in groups of MAX_CONCURRENT
+  for (let i = 0; i < batches.length; i += MAX_CONCURRENT) {
+    const concurrentBatches = batches.slice(i, i + MAX_CONCURRENT);
+    await Promise.all(concurrentBatches.map(processBatch));
+
+    completedCount += concurrentBatches.length;
+    const entriesCompleted = Math.min(completedCount * BATCH_SIZE, entries.length);
+
+    if (onProgress) {
+      onProgress(entriesCompleted, entries.length);
+    }
+
+    log(`Completed ${completedCount}/${totalBatches} batches`);
   }
 
   log('LLM classification complete');
