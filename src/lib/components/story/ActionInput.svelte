@@ -8,6 +8,7 @@
   import { Send, Wand2, MessageSquare, Brain, Sparkles, Feather, RefreshCw, X, PenLine } from 'lucide-svelte';
   import type { Chapter } from '$lib/types';
   import Suggestions from './Suggestions.svelte';
+  import GrammarCheck from './GrammarCheck.svelte';
   import {
     emitUserInput,
     emitNarrativeResponse,
@@ -851,6 +852,9 @@
       onRefresh={refreshSuggestions}
     />
 
+    <!-- Grammar Check -->
+    <GrammarCheck text={inputValue} onApplySuggestion={(newText) => inputValue = newText} />
+
     <!-- Creative Writing Mode: Direction Input -->
     <div class="flex gap-2">
       <div class="relative flex-1">
@@ -921,6 +925,9 @@
         <span class="hidden xs:inline">Free</span>
       </button>
     </div>
+
+    <!-- Grammar Check -->
+    <GrammarCheck text={inputValue} onApplySuggestion={(newText) => inputValue = newText} />
 
     <!-- Adventure Mode: Input area -->
     <div class="flex gap-2">

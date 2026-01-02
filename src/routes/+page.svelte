@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { database } from '$lib/services/database';
   import { settings } from '$lib/stores/settings.svelte';
+  import { grammarService } from '$lib/services/grammar';
   import AppShell from '$lib/components/layout/AppShell.svelte';
 
   let initialized = $state(false);
@@ -14,6 +15,9 @@
 
       // Initialize settings from database
       await settings.init();
+
+      // Pre-load grammar checker WASM in background (don't await)
+      grammarService.setup().catch(console.error);
 
       initialized = true;
     } catch (e) {
