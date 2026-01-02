@@ -100,7 +100,7 @@ export interface LorebookImportResult {
   errors: string[];
   warnings: string[];
   metadata: {
-    format: 'sillytavern' | 'unknown';
+    format: 'aventura' | 'sillytavern' | 'unknown';
     totalEntries: number;
     importedEntries: number;
     skippedEntries: number;
@@ -429,7 +429,168 @@ export function parseSillyTavernLorebook(jsonString: string): LorebookImportResu
 }
 
 /**
+ * Check if the data is in Aventura JSON format.
+ * Aventura format is an array of Entry objects with specific fields.
+ */
+function isAventuraFormat(data: unknown): data is Entry[] {
+  if (!Array.isArray(data)) return false;
+  if (data.length === 0) return false;
+
+  // Check if first item looks like an Entry object
+  const first = data[0];
+  return (
+    typeof first === 'object' &&
+    first !== null &&
+    'name' in first &&
+    'type' in first &&
+    'description' in first &&
+    'injection' in first &&
+    typeof first.injection === 'object' &&
+    first.injection !== null &&
+    'mode' in first.injection
+  );
+}
+
+/**
+ * Parse an Aventura JSON lorebook (array of Entry objects).
+ */
+export function parseAventuraLorebook(jsonString: string): LorebookImportResult {
+  const result: LorebookImportResult = {
+    success: false,
+    entries: [],
+    errors: [],
+    warnings: [],
+    metadata: {
+      format: 'aventura',
+      totalEntries: 0,
+      importedEntries: 0,
+      skippedEntries: 0,
+    },
+  };
+
+  try {
+    const data = JSON.parse(jsonString);
+
+    if (!isAventuraFormat(data)) {
+      result.errors.push('Invalid Aventura format: expected array of Entry objects');
+      result.metadata.format = 'unknown';
+      return result;
+    }
+
+    result.metadata.totalEntries = data.length;
+
+    log('Parsing Aventura lorebook', { totalEntries: data.length });
+
+    for (const entry of data) {
+      try {
+        // Validate required fields
+        if (!entry.name?.trim()) {
+          result.warnings.push(`Skipped entry with no name`);
+          result.metadata.skippedEntries++;
+          continue;
+        }
+
+        if (!entry.description?.trim() && !entry.hiddenInfo?.trim()) {
+          result.warnings.push(`Skipped empty entry: ${entry.name}`);
+          result.metadata.skippedEntries++;
+          continue;
+        }
+
+        // Convert Entry to ImportedEntry format for consistency
+        const importedEntry: ImportedEntry = {
+          name: entry.name,
+          type: entry.type || 'concept',
+          description: entry.description || '',
+          keywords: entry.injection?.keywords || [],
+          injectionMode: entry.injection?.mode || 'keyword',
+          priority: entry.injection?.priority ?? 100,
+          disabled: entry.injection?.mode === 'never',
+          group: null,
+          originalData: entry as unknown as SillyTavernEntry, // Store original for full restoration
+        };
+
+        result.entries.push(importedEntry);
+        result.metadata.importedEntries++;
+
+      } catch (entryError) {
+        const errorMsg = entryError instanceof Error ? entryError.message : 'Unknown error';
+        result.errors.push(`Failed to parse entry "${entry.name}": ${errorMsg}`);
+        result.metadata.skippedEntries++;
+      }
+    }
+
+    result.success = result.metadata.importedEntries > 0;
+
+    log('Aventura import complete', {
+      imported: result.metadata.importedEntries,
+      skipped: result.metadata.skippedEntries,
+      errors: result.errors.length,
+      warnings: result.warnings.length,
+    });
+
+  } catch (parseError) {
+    const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown error';
+    result.errors.push(`Failed to parse JSON: ${errorMsg}`);
+    log('Parse error:', parseError);
+  }
+
+  return result;
+}
+
+/**
+ * Auto-detect format and parse a lorebook JSON string.
+ * Supports both Aventura and SillyTavern formats.
+ */
+export function parseLorebook(jsonString: string): LorebookImportResult {
+  try {
+    const data = JSON.parse(jsonString);
+
+    // Check for Aventura format (array of Entry objects)
+    if (isAventuraFormat(data)) {
+      log('Detected Aventura format');
+      return parseAventuraLorebook(jsonString);
+    }
+
+    // Check for SillyTavern format (object with entries property)
+    if (data && typeof data === 'object' && 'entries' in data) {
+      log('Detected SillyTavern format');
+      return parseSillyTavernLorebook(jsonString);
+    }
+
+    // Unknown format
+    return {
+      success: false,
+      entries: [],
+      errors: ['Unknown lorebook format. Expected Aventura JSON array or SillyTavern format.'],
+      warnings: [],
+      metadata: {
+        format: 'unknown',
+        totalEntries: 0,
+        importedEntries: 0,
+        skippedEntries: 0,
+      },
+    };
+
+  } catch (parseError) {
+    const errorMsg = parseError instanceof Error ? parseError.message : 'Unknown error';
+    return {
+      success: false,
+      entries: [],
+      errors: [`Failed to parse JSON: ${errorMsg}`],
+      warnings: [],
+      metadata: {
+        format: 'unknown',
+        totalEntries: 0,
+        importedEntries: 0,
+        skippedEntries: 0,
+      },
+    };
+  }
+}
+
+/**
  * Convert imported entries to Aventura Entry format.
+ * For Aventura imports, restores original Entry data when available.
  * Note: Entries are created without storyId - this should be set when saving to database.
  */
 export function convertToEntries(
@@ -439,7 +600,37 @@ export function convertToEntries(
   const now = Date.now();
 
   return importedEntries.map(imported => {
-    // Create base state based on inferred type
+    // Check if originalData is a full Aventura Entry (has state and injection.mode)
+    const original = imported.originalData as unknown as Partial<Entry>;
+    const isAventuraEntry = original && 'state' in original && 'injection' in original && original.injection?.mode;
+
+    // For Aventura imports, restore the full entry data
+    if (isAventuraEntry && original.state) {
+      return {
+        name: original.name || imported.name,
+        type: original.type || imported.type,
+        description: original.description || imported.description,
+        hiddenInfo: original.hiddenInfo || null,
+        aliases: original.aliases || [],
+        state: original.state,
+        adventureState: original.adventureState || null,
+        creativeState: original.creativeState || null,
+        injection: original.injection || {
+          mode: imported.injectionMode,
+          keywords: imported.keywords,
+          priority: imported.priority,
+        },
+        firstMentioned: original.firstMentioned || null,
+        lastMentioned: original.lastMentioned || null,
+        mentionCount: original.mentionCount || 0,
+        createdBy,
+        createdAt: now,
+        updatedAt: now,
+        loreManagementBlacklisted: original.loreManagementBlacklisted || false,
+      };
+    }
+
+    // For SillyTavern imports, create new state based on type
     const baseState = { type: imported.type };
 
     // Create type-specific state

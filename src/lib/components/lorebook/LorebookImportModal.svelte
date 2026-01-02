@@ -2,7 +2,7 @@
   import { ui } from '$lib/stores/ui.svelte';
   import { story } from '$lib/stores/story.svelte';
   import {
-    parseSillyTavernLorebook,
+    parseLorebook,
     classifyEntriesWithLLM,
     convertToEntries,
     type ImportedEntry,
@@ -70,7 +70,7 @@
 
     try {
       const text = await file.text();
-      const result = parseSillyTavernLorebook(text);
+      const result = parseLorebook(text);
 
       if (!result.success || result.entries.length === 0) {
         error = result.errors.length > 0
@@ -223,7 +223,7 @@
           onkeydown={(e) => e.key === 'Enter' && fileInput.click()}
         >
           <FileJson class="h-12 w-12 text-surface-500 mx-auto mb-3" />
-          <p class="text-surface-300 mb-1">Drop a SillyTavern lorebook here</p>
+          <p class="text-surface-300 mb-1">Drop a lorebook file here</p>
           <p class="text-sm text-surface-500">or click to browse</p>
         </div>
         <input
@@ -235,7 +235,7 @@
         />
 
         <p class="text-xs text-surface-500">
-          Supports SillyTavern lorebook format (.json)
+          Supports Aventura and SillyTavern lorebook formats (.json)
         </p>
       {:else}
         <!-- Preview -->
