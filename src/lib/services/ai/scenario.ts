@@ -1078,7 +1078,7 @@ Describe the environment and situation only. Do NOT write anything ${userName} d
     title: string;
     genre: string;
     mode: StoryMode;
-    settings: { pov: POV };
+    settings: { pov: POV; tense: Tense };
     protagonist: Partial<Character>;
     startingLocation: Partial<Location>;
     initialItems: Partial<Item>[];
@@ -1096,7 +1096,7 @@ Describe the environment and situation only. Do NOT write anything ${userName} d
       title: opening.title || wizardData.title,
       genre: genreLabel,
       mode,
-      settings: { pov: writingStyle.pov },
+      settings: { pov: writingStyle.pov, tense: writingStyle.tense },
       protagonist: {
         name: protagonist?.name || (writingStyle.pov === 'second' ? 'You' : 'The Protagonist'),
         description: protagonist?.description,

@@ -59,7 +59,7 @@ class AIService {
 
     // Build the system prompt with world state context
     const systemPromptOverride = story?.settings?.systemPromptOverride;
-    const pov = story?.settings?.pov;
+    const pov = story?.settings?.pov ?? (mode === 'creative-writing' ? 'third' : 'second');
     const systemPrompt = this.buildSystemPrompt(worldState, story?.templateId, undefined, mode, undefined, systemPromptOverride, pov);
     log('System prompt built, length:', systemPrompt.length, 'mode:', mode);
 
@@ -69,7 +69,7 @@ class AIService {
     ];
 
     // Add priming user message to establish narrator role
-    const tense = story?.settings?.tense || 'present';
+    const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
     const primingMessage = this.buildPrimingMessage(mode, pov, tense);
     messages.push({ role: 'user', content: primingMessage });
 
@@ -175,7 +175,7 @@ class AIService {
 
     // Build the system prompt with world state context
     const systemPromptOverride = story?.settings?.systemPromptOverride;
-    const pov = story?.settings?.pov;
+    const pov = story?.settings?.pov ?? (mode === 'creative-writing' ? 'third' : 'second');
     let systemPrompt = this.buildSystemPrompt(
       worldState,
       story?.templateId,
@@ -210,7 +210,7 @@ class AIService {
     ];
 
     // Add priming user message to establish narrator role
-    const tense = story?.settings?.tense || 'present';
+    const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
     const primingMessage = this.buildPrimingMessage(mode, pov, tense);
     messages.push({ role: 'user', content: primingMessage });
 
@@ -754,7 +754,9 @@ class AIService {
     const tenseInstruction = tense === 'past' ? 'past tense' : 'present tense';
 
     let povInstruction: string;
-    if (pov === 'third') {
+    if (pov === 'first') {
+      povInstruction = 'first person (I/me/my)';
+    } else if (pov === 'third') {
       povInstruction = 'third person (they/the character name)';
     } else {
       povInstruction = 'second person (you/your)';
@@ -797,7 +799,7 @@ I am the player. You narrate the world around me. Begin when I take my first act
 
     if (systemPromptOverride) {
       basePrompt = systemPromptOverride;
-    } else if (templateId) {
+    } else if (templateId && mode === 'adventure') {
       // Get template-specific system prompt if available
       const template = BUILTIN_TEMPLATES.find(t => t.id === templateId);
       if (template?.systemPrompt) {
@@ -820,12 +822,21 @@ I am the player. You narrate the world around me. Begin when I take my first act
       const protagonist = worldState.characters.find(c => c.relationship === 'self');
       const protagonistName = protagonist?.name || 'the protagonist';
       basePrompt += `\n\n<pov_instruction>
-Write in THIRD PERSON. Refer to the player character as "${protagonistName}" or "they/them".
+Write in THIRD PERSON. Refer to the protagonist as "${protagonistName}" or "they/them".
 Example: "${protagonistName} steps forward..." or "They examine the door..."
-Do NOT use "you" to refer to the player character.
+Do NOT use "you" to refer to the protagonist.
+</pov_instruction>`;
+    } else if (pov === 'first') {
+      basePrompt += `\n\n<pov_instruction>
+Write in FIRST PERSON. Use "I/me/my" for the protagonist.
+Do NOT use "you" to refer to the protagonist.
+</pov_instruction>`;
+    } else if (mode === 'creative-writing') {
+      basePrompt += `\n\n<pov_instruction>
+Write in SECOND PERSON. Use "you/your" for the protagonist.
+Do NOT use third person to refer to the protagonist.
 </pov_instruction>`;
     }
-    // For first and second person, the default prompt already instructs to use "you"
 
     // Build world state context block
     let contextBlock = '';
@@ -910,9 +921,11 @@ Do NOT use "you" to refer to the player character.
 
     // Final instruction - reinforcing the core rules (mode-specific)
     if (mode === 'creative-writing') {
-      const povInstruction = pov === 'third'
-        ? 'Use THIRD PERSON for all characters.'
-        : 'Use the POV specified by the author.';
+      const povInstruction = pov === 'first'
+        ? 'Use FIRST PERSON for the protagonist (I/me/my). Other characters remain third person.'
+        : pov === 'second'
+          ? 'Use SECOND PERSON for the protagonist (you/your).'
+          : 'Use THIRD PERSON for all characters.';
 
       basePrompt += `\n\n<response_instruction>
 Write prose based on the author's direction:
@@ -928,9 +941,11 @@ STYLE:
 End at a natural narrative beat.
 </response_instruction>`;
     } else {
-      const povInstruction = pov === 'third'
-        ? 'Use THIRD PERSON (they/the protagonist) to describe what the character does.'
-        : 'Use SECOND PERSON (you/your) to describe what the player does. If the player writes "I do X", respond with "You do X".';
+      const povInstruction = pov === 'first'
+        ? 'Use FIRST PERSON (I/me/my) to describe what the player does. Do NOT use "you" to refer to the player.'
+        : pov === 'third'
+          ? 'Use THIRD PERSON (they/the protagonist) to describe what the character does.'
+          : 'Use SECOND PERSON (you/your) to describe what the player does. If the player writes "I do X", respond with "You do X".';
 
       basePrompt += `\n\n<response_instruction>
 Respond to the player's action with an engaging narrative continuation:

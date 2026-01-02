@@ -55,7 +55,7 @@
       selectedTemplateId,
       template?.genre ?? undefined,
       selectedMode,
-      { pov: selectedPOV }
+      { pov: selectedPOV, tense: selectedMode === 'creative-writing' ? 'past' : 'present' }
     );
 
     await story.loadStory(newStoryData.id);

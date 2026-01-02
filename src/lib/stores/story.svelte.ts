@@ -61,7 +61,8 @@ class StoryStore {
   }
 
   get pov(): 'first' | 'second' | 'third' {
-    return this.currentStory?.settings?.pov ?? 'second';
+    const mode = this.currentStory?.mode ?? 'adventure';
+    return this.currentStory?.settings?.pov ?? (mode === 'creative-writing' ? 'third' : 'second');
   }
 
   get inventoryItems(): Item[] {
@@ -693,10 +694,32 @@ class StoryStore {
         log('Updating location:', update.name, update.changes);
         const changes: Partial<Location> = {};
         if (update.changes.visited !== undefined) changes.visited = update.changes.visited;
-        if (update.changes.current !== undefined) changes.current = update.changes.current;
-        if (update.changes.descriptionAddition && existing.description) {
-          changes.description = existing.description + ' ' + update.changes.descriptionAddition;
+        if (update.changes.descriptionAddition) {
+          const addition = update.changes.descriptionAddition.trim();
+          if (addition) {
+            changes.description = existing.description
+              ? `${existing.description} ${addition}`
+              : addition;
+          }
         }
+
+        if (update.changes.current === true) {
+          changes.visited = true;
+          await database.setCurrentLocation(storyId, existing.id);
+          if (Object.keys(changes).length > 0) {
+            await database.updateLocation(existing.id, changes);
+          }
+          this.locations = this.locations.map(l => {
+            if (l.id === existing.id) {
+              return { ...l, ...changes, current: true, visited: true };
+            }
+            return { ...l, current: false };
+          });
+          continue;
+        }
+
+        if (update.changes.current === false) changes.current = false;
+        if (Object.keys(changes).length === 0) continue;
         await database.updateLocation(existing.id, changes);
         this.locations = this.locations.map(l =>
           l.id === existing.id ? { ...l, ...changes } : l
@@ -1100,7 +1123,7 @@ class StoryStore {
     title: string;
     genre: string;
     mode: StoryMode;
-    settings: { pov: 'first' | 'second' | 'third' };
+    settings: { pov: 'first' | 'second' | 'third'; tense: 'past' | 'present' };
     protagonist: Partial<Character>;
     startingLocation: Partial<Location>;
     initialItems: Partial<Item>[];
@@ -1126,6 +1149,7 @@ class StoryStore {
       mode: data.mode,
       settings: {
         pov: data.settings.pov,
+        tense: data.settings.tense,
         systemPromptOverride: data.systemPrompt,
       },
       memoryConfig: DEFAULT_MEMORY_CONFIG,

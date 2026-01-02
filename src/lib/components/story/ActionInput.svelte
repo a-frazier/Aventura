@@ -252,6 +252,12 @@
     log('Starting lore management...');
     ui.startLoreManagement();
 
+    let changeCount = 0;
+    const bumpChanges = (delta = 1) => {
+      changeCount += delta;
+      return changeCount;
+    };
+
     try {
       const result = await aiService.runLoreManagement(
         story.currentStory.id,
@@ -276,15 +282,15 @@
               createdBy: entry.createdBy,
               loreManagementBlacklisted: entry.loreManagementBlacklisted,
             });
-            ui.updateLoreManagementProgress('Creating entries...', result?.changes.length ?? 0);
+            ui.updateLoreManagementProgress('Creating entries...', bumpChanges());
           },
           onUpdateEntry: async (id, updates) => {
             await story.updateLorebookEntry(id, updates);
-            ui.updateLoreManagementProgress('Updating entries...', result?.changes.length ?? 0);
+            ui.updateLoreManagementProgress('Updating entries...', bumpChanges());
           },
           onDeleteEntry: async (id) => {
             await story.deleteLorebookEntry(id);
-            ui.updateLoreManagementProgress('Cleaning up entries...', result?.changes.length ?? 0);
+            ui.updateLoreManagementProgress('Cleaning up entries...', bumpChanges());
           },
           onMergeEntries: async (entryIds, mergedEntry) => {
             // Delete old entries and create merged one
@@ -305,7 +311,7 @@
               createdBy: mergedEntry.createdBy,
               loreManagementBlacklisted: mergedEntry.loreManagementBlacklisted,
             });
-            ui.updateLoreManagementProgress('Merging entries...', result?.changes.length ?? 0);
+            ui.updateLoreManagementProgress('Merging entries...', bumpChanges());
           },
         }
       );
@@ -419,59 +425,40 @@
       if (story.chapters.length > 0 && story.memoryConfig.enableRetrieval) {
         retrievalTasks.push((async () => {
           try {
-            // Check if timeline fill should be used (default over agentic/basic)
-            if (aiService.shouldUseTimelineFill(story.chapters)) {
-              log('Starting timeline fill...', { chaptersCount: story.chapters.length });
+            const timelineFillEnabled = settings.systemServicesSettings.timelineFill?.enabled ?? true;
+            if (!timelineFillEnabled) {
+              log('Timeline fill disabled, skipping memory retrieval');
+              return;
+            }
 
-              // Timeline fill: generates queries and executes them in one go
-              const timelineResult = await aiService.runTimelineFill(
-                userActionContent,
-                story.visibleEntries,
+            log('Starting timeline fill...', { chaptersCount: story.chapters.length });
+
+            // Timeline fill: generates queries and executes them in one go
+            const timelineResult = await aiService.runTimelineFill(
+              userActionContent,
+              story.visibleEntries,
+              story.chapters,
+              story.entries // All entries for querying chapter content
+            );
+
+            if (timelineResult.responses.length > 0) {
+              // Calculate positions for prompt injection
+              const currentPosition = story.entries.length;
+              const firstVisiblePosition = story.entries.length - story.visibleEntries.length + 1;
+
+              retrievedChapterContext = aiService.formatTimelineFillForPrompt(
                 story.chapters,
-                story.entries // All entries for querying chapter content
+                timelineResult,
+                currentPosition,
+                firstVisiblePosition
               );
-
-              if (timelineResult.responses.length > 0) {
-                // Calculate positions for prompt injection
-                const currentPosition = story.entries.length;
-                const firstVisiblePosition = story.entries.length - story.visibleEntries.length + 1;
-
-                retrievedChapterContext = aiService.formatTimelineFillForPrompt(
-                  story.chapters,
-                  timelineResult,
-                  currentPosition,
-                  firstVisiblePosition
-                );
-                log('Timeline fill complete', {
-                  queriesGenerated: timelineResult.queries.length,
-                  responsesCount: timelineResult.responses.length,
-                  contextLength: retrievedChapterContext?.length ?? 0,
-                });
-              } else {
-                log('Timeline fill returned no responses (no relevant queries)');
-              }
+              log('Timeline fill complete', {
+                queriesGenerated: timelineResult.queries.length,
+                responsesCount: timelineResult.responses.length,
+                contextLength: retrievedChapterContext?.length ?? 0,
+              });
             } else {
-              // Fallback to basic retrieval decision
-              log('Starting basic memory retrieval...', { chaptersCount: story.chapters.length });
-              const retrievalDecision = await aiService.decideRetrieval(
-                userActionContent,
-                story.visibleEntries.slice(-5),
-                story.chapters,
-                story.memoryConfig
-              );
-
-              if (retrievalDecision.relevantChapterIds.length > 0) {
-                retrievedChapterContext = aiService.buildRetrievedContextBlock(
-                  story.chapters,
-                  retrievalDecision
-                );
-                log('Basic memory retrieval complete', {
-                  relevantChapters: retrievalDecision.relevantChapterIds.length,
-                  contextLength: retrievedChapterContext?.length ?? 0,
-                });
-              } else {
-                log('No relevant chapters found for retrieval');
-              }
+              log('Timeline fill returned no responses (no relevant queries)');
             }
           } catch (retrievalError) {
             log('Memory retrieval failed (non-fatal)', retrievalError);
