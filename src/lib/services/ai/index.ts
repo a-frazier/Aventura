@@ -63,8 +63,9 @@ class AIService {
     const promptPov = mode === 'creative-writing'
       ? 'third'
       : (pov === 'third' ? 'third' : 'second');
-    const systemPrompt = this.buildSystemPrompt(worldState, story?.templateId, undefined, mode, undefined, systemPromptOverride, promptPov);
-    log('System prompt built, length:', systemPrompt.length, 'mode:', mode);
+    const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
+    const systemPrompt = this.buildSystemPrompt(worldState, story?.templateId, undefined, mode, undefined, systemPromptOverride, promptPov, tense);
+    log('System prompt built, length:', systemPrompt.length, 'mode:', mode, 'pov:', promptPov, 'tense:', tense);
 
     // Build conversation history
     const messages: Message[] = [
@@ -72,7 +73,6 @@ class AIService {
     ];
 
     // Add priming user message to establish narrator role
-    const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
     const primingMessage = this.buildPrimingMessage(mode, promptPov, tense);
     messages.push({ role: 'user', content: primingMessage });
 
@@ -185,6 +185,7 @@ class AIService {
     const promptPov = mode === 'creative-writing'
       ? 'third'
       : (pov === 'third' ? 'third' : 'second');
+    const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
     let systemPrompt = this.buildSystemPrompt(
       worldState,
       story?.templateId,
@@ -192,7 +193,8 @@ class AIService {
       mode,
       tieredContextBlock,
       systemPromptOverride,
-      promptPov
+      promptPov,
+      tense
     );
 
     // Inject chapter summaries if chapters exist
@@ -211,7 +213,7 @@ class AIService {
       log('Style guidance injected', { phrasesCount: styleReview.phrases.length });
     }
 
-    log('System prompt built, length:', systemPrompt.length, 'mode:', mode, 'pov:', pov);
+    log('System prompt built, length:', systemPrompt.length, 'mode:', mode, 'pov:', promptPov, 'tense:', tense);
 
     // Build conversation history
     const messages: Message[] = [
@@ -219,7 +221,6 @@ class AIService {
     ];
 
     // Add priming user message to establish narrator role
-    const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
     const primingMessage = this.buildPrimingMessage(mode, promptPov, tense);
     messages.push({ role: 'user', content: primingMessage });
 
@@ -828,7 +829,20 @@ Your role:
 
 I am the author directing the story. Write what I ask for.`;
     } else {
-      return `You are the narrator of this interactive adventure. Write in ${tenseInstruction}, ${povInstruction}.
+      // Adventure mode - POV-aware priming message
+      if (pov === 'third') {
+        return `You are the narrator of this interactive adventure. Write in ${tenseInstruction}, ${povInstruction}.
+
+Your role:
+- Describe the protagonist's experiences and the world around them
+- Control all NPCs and the environment
+- NEVER write the protagonist's dialogue, decisions, or inner thoughts - I decide those
+- When I say "I do X", describe the results in third person (e.g., "I open the door" → "The protagonist pushes open the heavy door..." or use their name)
+
+I am the player controlling the protagonist. You narrate what happens. Begin when I take my first action.`;
+      } else {
+        // First/second person: User says "I do X", AI responds with "You do X"
+        return `You are the narrator of this interactive adventure. Write in ${tenseInstruction}, ${povInstruction}.
 
 Your role:
 - Describe what I see, hear, and experience as I explore
@@ -837,6 +851,7 @@ Your role:
 - When I say "I do X", describe the results using "you" (e.g., "I open the door" → "You push open the heavy door...")
 
 I am the player. You narrate the world around me. Begin when I take my first action.`;
+      }
     }
   }
 
@@ -847,7 +862,8 @@ I am the player. You narrate the world around me. Begin when I take my first act
     mode: 'adventure' | 'creative-writing' = 'adventure',
     tieredContextBlock?: string,
     systemPromptOverride?: string,
-    pov?: 'first' | 'second' | 'third'
+    pov?: 'first' | 'second' | 'third',
+    tense: 'past' | 'present' = 'present'
   ): string {
     // Use custom system prompt if provided (from wizard-generated stories)
     let basePrompt = '';
@@ -871,26 +887,35 @@ I am the player. You narrate the world around me. Begin when I take my first act
       }
     }
 
-    // Add POV-specific instructions
-    if (pov === 'third') {
-      // Find protagonist name for third person narration
+    // Add POV and tense instructions
+    const tenseInstruction = tense === 'past' ? 'PAST TENSE' : 'PRESENT TENSE';
+
+    if (mode === 'creative-writing') {
+      // Creative writing mode: third person by default
       const protagonist = worldState.characters.find(c => c.relationship === 'self');
       const protagonistName = protagonist?.name || 'the protagonist';
-      basePrompt += `\n\n<pov_instruction>
-Write in THIRD PERSON. Refer to the protagonist as "${protagonistName}" or "they/them".
-Example: "${protagonistName} steps forward..." or "They examine the door..."
+      basePrompt += `\n\n<style_instruction>
+Write in ${tenseInstruction}, THIRD PERSON.
+Refer to the protagonist as "${protagonistName}" or "they/them".
+Example: "${protagonistName} ${tense === 'past' ? 'stepped' : 'steps'} forward..." or "They ${tense === 'past' ? 'examined' : 'examine'} the door..."
+</style_instruction>`;
+    } else if (pov === 'third') {
+      // Adventure mode: third person
+      const protagonist = worldState.characters.find(c => c.relationship === 'self');
+      const protagonistName = protagonist?.name || 'the protagonist';
+      basePrompt += `\n\n<style_instruction>
+Write in ${tenseInstruction}, THIRD PERSON.
+Refer to the protagonist as "${protagonistName}" or "they/them".
+Example: "${protagonistName} ${tense === 'past' ? 'stepped' : 'steps'} forward..." or "They ${tense === 'past' ? 'examined' : 'examine'} the door..."
 Do NOT use "you" to refer to the protagonist.
-</pov_instruction>`;
-    } else if (pov === 'first') {
-      basePrompt += `\n\n<pov_instruction>
-Write in FIRST PERSON. Use "I/me/my" for the protagonist.
-Do NOT use "you" to refer to the protagonist.
-</pov_instruction>`;
-    } else if (mode === 'creative-writing') {
-      basePrompt += `\n\n<pov_instruction>
-Write in SECOND PERSON. Use "you/your" for the protagonist.
-Do NOT use third person to refer to the protagonist.
-</pov_instruction>`;
+</style_instruction>`;
+    } else {
+      // Adventure mode: second person (default)
+      basePrompt += `\n\n<style_instruction>
+Write in ${tenseInstruction}, SECOND PERSON.
+Use "you/your" for the protagonist.
+Example: "You ${tense === 'past' ? 'stepped' : 'step'} forward..." or "You ${tense === 'past' ? 'examined' : 'examine'} the door..."
+</style_instruction>`;
     }
 
     // Build world state context block
@@ -975,12 +1000,11 @@ Do NOT use third person to refer to the protagonist.
     }
 
     // Final instruction - reinforcing the core rules (mode-specific)
+    const tenseRule = tense === 'past' ? 'Use PAST TENSE consistently.' : 'Use PRESENT TENSE consistently.';
+
     if (mode === 'creative-writing') {
-      const povInstruction = pov === 'first'
-        ? 'Use FIRST PERSON for the protagonist (I/me/my). Other characters remain third person.'
-        : pov === 'second'
-          ? 'Use SECOND PERSON for the protagonist (you/your).'
-          : 'Use THIRD PERSON for all characters.';
+      const protagonist = worldState.characters.find(c => c.relationship === 'self');
+      const protagonistName = protagonist?.name || 'the protagonist';
 
       basePrompt += `\n\n<response_instruction>
 Write prose based on the author's direction:
@@ -989,33 +1013,52 @@ Write prose based on the author's direction:
 3. Maintain consistent characterization
 
 STYLE:
-- ${povInstruction}
+- ${tenseRule}
+- Use THIRD PERSON for all characters. Refer to the protagonist as "${protagonistName}".
 - Write vivid, engaging prose
 - Follow the author's lead on what happens
 
 End at a natural narrative beat.
 </response_instruction>`;
     } else {
-      const povInstruction = pov === 'first'
-        ? 'Use FIRST PERSON (I/me/my) to describe what the player does. Do NOT use "you" to refer to the player.'
-        : pov === 'third'
-          ? 'Use THIRD PERSON (they/the protagonist) to describe what the character does.'
-          : 'Use SECOND PERSON (you/your) to describe what the player does. If the player writes "I do X", respond with "You do X".';
+      // Adventure mode
+      if (pov === 'third') {
+        const protagonist = worldState.characters.find(c => c.relationship === 'self');
+        const protagonistName = protagonist?.name || 'the protagonist';
 
-      basePrompt += `\n\n<response_instruction>
+        basePrompt += `\n\n<response_instruction>
 Respond to the player's action with an engaging narrative continuation:
 1. Show the immediate results of their action through sensory detail
 2. Bring NPCs and environment to life with their own reactions
 3. Create new tension, opportunity, or discovery
 
 CRITICAL VOICE RULES:
-- ${povInstruction}
+- ${tenseRule}
+- Use THIRD PERSON. Refer to the protagonist as "${protagonistName}" or "they/them".
+- Do NOT use "you" to address the protagonist.
+- You are the NARRATOR describing what happens, not the protagonist themselves.
+- NEVER write the protagonist's dialogue, thoughts, or decisions.
+
+End with a natural opening for action, not a direct question.
+</response_instruction>`;
+      } else {
+        // Second person (default for adventure mode)
+        basePrompt += `\n\n<response_instruction>
+Respond to the player's action with an engaging narrative continuation:
+1. Show the immediate results of their action through sensory detail
+2. Bring NPCs and environment to life with their own reactions
+3. Create new tension, opportunity, or discovery
+
+CRITICAL VOICE RULES:
+- ${tenseRule}
+- Use SECOND PERSON (you/your). When the player writes "I do X", respond with "You do X".
 - You are the NARRATOR describing what happens TO the player, not the player themselves.
 - NEVER use "I/me/my" as if you are the player character.
 - NEVER write the player's dialogue, thoughts, or decisions.
 
 End with a natural opening for action, not a direct question.
 </response_instruction>`;
+      }
     }
 
     return basePrompt;
