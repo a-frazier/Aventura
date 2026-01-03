@@ -232,3 +232,4 @@ sunicon.*
 # -----------------------------------------------------------------------------
 *.local
 .env*.local
+aventura-release.keystore.old
