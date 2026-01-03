@@ -168,6 +168,7 @@ class ExportService {
       filters: [
         { name: 'Aventura Story', extensions: ['avt'] },
         { name: 'JSON', extensions: ['json'] },
+        { name: 'All Files', extensions: ['*'] }, // Fallback for Android compatibility
       ],
     });
 

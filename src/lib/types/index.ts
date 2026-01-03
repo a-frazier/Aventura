@@ -376,6 +376,7 @@ export interface UISettings {
   fontSize: 'small' | 'medium' | 'large';
   showWordCount: boolean;
   autoSave: boolean;
+  spellcheckEnabled: boolean;
 }
 
 export interface UpdateSettings {

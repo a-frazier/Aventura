@@ -536,6 +536,26 @@
             />
           </div>
 
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="text-sm font-medium text-surface-300">Spellcheck</label>
+              <p class="text-xs text-surface-500">Grammar and spelling suggestions while typing</p>
+            </div>
+            <button
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+              class:bg-accent-600={settings.uiSettings.spellcheckEnabled}
+              class:bg-surface-600={!settings.uiSettings.spellcheckEnabled}
+              onclick={() => settings.setSpellcheckEnabled(!settings.uiSettings.spellcheckEnabled)}
+              aria-label="Toggle spellcheck"
+            >
+              <span
+                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                class:translate-x-6={settings.uiSettings.spellcheckEnabled}
+                class:translate-x-1={!settings.uiSettings.spellcheckEnabled}
+              ></span>
+            </button>
+          </div>
+
           <!-- Updates Section -->
           <div class="border-t border-surface-700 pt-4 mt-4">
             <div class="flex items-center gap-2 mb-3">

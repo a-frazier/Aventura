@@ -791,7 +791,7 @@
             >
               <input
                 type="file"
-                accept=".json"
+                accept=".json,application/json,*/*"
                 class="hidden"
                 bind:this={importFileInput}
                 onchange={handleFileSelect}

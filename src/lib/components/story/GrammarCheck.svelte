@@ -1,5 +1,6 @@
 <script lang="ts">
   import { grammarService, type GrammarIssue } from '$lib/services/grammar';
+  import { settings } from '$lib/stores/settings.svelte';
   import { AlertCircle, Check, X, Plus } from 'lucide-svelte';
   import { slide } from 'svelte/transition';
 
@@ -15,10 +16,19 @@
   let expandedIssue = $state<number | null>(null);
   let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Check if spellcheck is enabled
+  const spellcheckEnabled = $derived(settings.uiSettings.spellcheckEnabled);
+
   // Debounced lint check
   $effect(() => {
     if (debounceTimeout) {
       clearTimeout(debounceTimeout);
+    }
+
+    // Skip if spellcheck is disabled
+    if (!spellcheckEnabled) {
+      issues = [];
+      return;
     }
 
     if (!text.trim()) {

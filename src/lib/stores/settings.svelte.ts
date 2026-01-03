@@ -549,6 +549,7 @@ class SettingsStore {
     fontSize: 'medium',
     showWordCount: true,
     autoSave: true,
+    spellcheckEnabled: true,
   });
 
   // Advanced wizard settings for scenario generation
@@ -589,6 +590,7 @@ class SettingsStore {
       const fontSize = await database.getSetting('font_size');
       const showWordCount = await database.getSetting('show_word_count');
       const autoSave = await database.getSetting('auto_save');
+      const spellcheckEnabled = await database.getSetting('spellcheck_enabled');
 
       if (theme) {
         this.uiSettings.theme = theme as ThemeId;
@@ -598,6 +600,7 @@ class SettingsStore {
       if (fontSize) this.uiSettings.fontSize = fontSize as 'small' | 'medium' | 'large';
       if (showWordCount) this.uiSettings.showWordCount = showWordCount === 'true';
       if (autoSave) this.uiSettings.autoSave = autoSave === 'true';
+      if (spellcheckEnabled !== null) this.uiSettings.spellcheckEnabled = spellcheckEnabled === 'true';
 
       // Load wizard settings
       const wizardSettingsJson = await database.getSetting('wizard_settings');
@@ -722,6 +725,11 @@ class SettingsStore {
   async setFontSize(size: 'small' | 'medium' | 'large') {
     this.uiSettings.fontSize = size;
     await database.setSetting('font_size', size);
+  }
+
+  async setSpellcheckEnabled(enabled: boolean) {
+    this.uiSettings.spellcheckEnabled = enabled;
+    await database.setSetting('spellcheck_enabled', enabled.toString());
   }
 
   get hasApiKey(): boolean {
@@ -851,6 +859,7 @@ class SettingsStore {
       fontSize: 'medium',
       showWordCount: true,
       autoSave: true,
+      spellcheckEnabled: true,
     };
 
     // Reset wizard settings
@@ -874,6 +883,7 @@ class SettingsStore {
     await database.setSetting('font_size', this.uiSettings.fontSize);
     await database.setSetting('show_word_count', this.uiSettings.showWordCount.toString());
     await database.setSetting('auto_save', this.uiSettings.autoSave.toString());
+    await database.setSetting('spellcheck_enabled', this.uiSettings.spellcheckEnabled.toString());
     await this.saveWizardSettings();
     await this.saveStoryGenerationSettings();
     await this.saveSystemServicesSettings();
