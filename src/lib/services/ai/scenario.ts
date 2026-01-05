@@ -934,6 +934,10 @@ Respond with valid JSON:
       ? `\nAUTHOR'S GUIDANCE FOR OPENING:\n${wizardData.openingGuidance.trim()}\n`
       : '';
 
+    const openingInstruction = mode === 'creative-writing'
+      ? ''
+      : `Describe the environment and situation. Do NOT write anything ${userName} does, says, thinks, or perceives. End with a moment that invites action.`;
+
     const messages: Message[] = [
       {
         role: 'system',
@@ -955,8 +959,7 @@ ${protagonist?.description || ''}
 
 ${characters && characters.length > 0 ? `NPCs WHO MAY APPEAR:
 ${characters.map(c => `- ${c.name} (${c.role}): ${c.description}`).join('\n')}
-` : ''}${guidanceSection}${lorebookContext}
-Describe the environment and situation. Do NOT write anything ${userName} does, says, thinks, or perceives. End with a moment that invites action.`
+` : ''}${guidanceSection}${lorebookContext}${openingInstruction ? `\n${openingInstruction}` : ''}`
       }
     ];
 
