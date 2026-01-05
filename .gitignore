@@ -238,3 +238,4 @@ aur/
 .env*.local
 aventura-release.keystore.old
 design.md
+prompting_guide.md
