@@ -307,11 +307,14 @@ export class ContextBuilder {
     // Build prompt for LLM selection
     const recentContent = recentEntries
       .slice(-3)
-      .map(e => `[${e.type}]: ${e.content.substring(0, 200)}...`)
+      .map(e => `[${e.type}]: ${e.content}`)
       .join('\n');
 
     const entrySummaries = remainingEntries
-      .map((e, i) => `${i + 1}. [${e.type}] ${e.name}: ${e.description?.substring(0, 100) || 'No description'}`)
+      .map((e, i) => {
+        const description = e.description || 'No description';
+        return `${i + 1}. [${e.type}] ${e.name}: ${description}`;
+      })
       .join('\n');
 
     const prompt = `You are selecting which story entries are relevant for the next narrative response.
@@ -554,7 +557,7 @@ If no entries are relevant, return: []`;
       for (const loc of mentionedLocs) {
         block += `\n• ${loc.name}`;
         if (loc.description) {
-          block += `: ${loc.description.substring(0, 150)}`;
+          block += `: ${loc.description}`;
         }
       }
     }
@@ -566,7 +569,7 @@ If no entries are relevant, return: []`;
       for (const item of mentionedItems) {
         block += `\n• ${item.name}`;
         if (item.description) {
-          block += `: ${item.description.substring(0, 100)}`;
+          block += `: ${item.description}`;
         }
       }
     }

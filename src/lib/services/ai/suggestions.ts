@@ -79,11 +79,7 @@ export class SuggestionsService {
       const entryDescriptions = lorebookEntries.slice(0, 15).map(e => {
         let desc = `• ${e.name} (${e.type})`;
         if (e.description) {
-          // Truncate long descriptions
-          const shortDesc = e.description.length > 150
-            ? e.description.slice(0, 150) + '...'
-            : e.description;
-          desc += `: ${shortDesc}`;
+          desc += `: ${e.description}`;
         }
         return desc;
       }).join('\n');

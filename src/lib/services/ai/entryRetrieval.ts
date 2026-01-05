@@ -528,13 +528,16 @@ export class EntryRetrievalService {
       .slice(-5)
       .map(e => {
         const prefix = e.type === 'user_action' ? '[ACTION]' : '[NARRATION]';
-        return `${prefix}: ${e.content.substring(0, 400)}`;
+        return `${prefix}: ${e.content}`;
       })
       .join('\n\n');
 
     // Build numbered entry list (simple 1, 2, 3...)
     const entryList = availableEntries
-      .map((e, i) => `${i + 1}. [${e.type.toUpperCase()}] "${e.name}": ${e.description.substring(0, 250)}${e.description.length > 250 ? '...' : ''}`)
+      .map((e, i) => {
+        const desc = e.description ? `: ${e.description}` : '';
+        return `${i + 1}. [${e.type.toUpperCase()}] "${e.name}"${desc}`;
+      })
       .join('\n');
 
     const prompt = `You are a lorebook retrieval system. These entries were NOT matched by keyword search. Your job is to select any that are still relevant to the current scene.

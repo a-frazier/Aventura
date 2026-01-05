@@ -371,10 +371,7 @@ Guidelines:
     const messagesInRange = entries.map((e, i) => {
       const messageId = startIndex + i + 1; // 1-based message ID
       const prefix = e.type === 'user_action' ? '[ACTION]' : '[NARRATION]';
-      const truncatedContent = e.content.length > 300
-        ? e.content.substring(0, 300) + '...'
-        : e.content;
-      return `Message ${messageId}:\n${prefix} ${truncatedContent}`;
+      return `Message ${messageId}:\n${prefix} ${e.content}`;
     }).join('\n\n---\n\n');
 
     const firstValidId = startIndex + 1;

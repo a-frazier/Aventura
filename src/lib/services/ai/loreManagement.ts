@@ -600,13 +600,13 @@ export class LoreManagementService {
   private buildInitialPrompt(context: ToolExecutionContext): string {
     // Build entry summary
     const entrySummary = context.entries.length > 0
-      ? context.entries.map(e => `- ${e.name} (${e.type}): ${e.description.substring(0, 100)}...`).join('\n')
+      ? context.entries.map(e => `- ${e.name} (${e.type}): ${e.description}`).join('\n')
       : 'No entries yet.';
 
     // Build recent story summary (last few messages)
     const recentStory = context.recentMessages.slice(-10).map(m => {
       const prefix = m.type === 'user_action' ? '[ACTION]' : '[NARRATION]';
-      return `${prefix} ${m.content.substring(0, 200)}...`;
+      return `${prefix} ${m.content}`;
     }).join('\n\n');
     const recentStorySection = context.recentMessages.length > 0
       ? `# Recent Story (last ${Math.min(10, context.recentMessages.length)} messages)\n${recentStory}\n`
@@ -614,7 +614,7 @@ export class LoreManagementService {
 
     // Build chapter summary
     const chapterSummary = context.chapters.length > 0
-      ? context.chapters.map(c => `Chapter ${c.number}: ${c.summary.substring(0, 100)}...`).join('\n')
+      ? context.chapters.map(c => `Chapter ${c.number}: ${c.summary}`).join('\n')
       : 'No chapters yet.';
 
     return `# Current Lorebook Entries
@@ -644,7 +644,7 @@ Use the available tools to make necessary changes, then call finish_lore_managem
           id: e.id,
           name: e.name,
           type: e.type,
-          description: e.description.substring(0, 200),
+          description: e.description,
           aliases: e.aliases,
         })));
       }

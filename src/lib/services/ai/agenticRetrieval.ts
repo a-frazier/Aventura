@@ -363,7 +363,7 @@ export class AgenticRetrievalService {
     // Format recent context (last 5 entries)
     const recentContext = context.recentEntries.slice(-5).map(e => {
       const prefix = e.type === 'user_action' ? '[ACTION]' : '[NARRATION]';
-      return `${prefix} ${e.content.substring(0, 300)}...`;
+      return `${prefix} ${e.content}`;
     }).join('\n\n');
 
     return `# Current Situation
@@ -498,7 +498,7 @@ Please gather relevant context from past chapters that will help respond to this
           id: e.id,
           name: e.name,
           type: e.type,
-          description: e.description.substring(0, 150),
+          description: e.description,
           aliases: e.aliases,
         })));
       }

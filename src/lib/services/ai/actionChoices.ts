@@ -79,7 +79,7 @@ export class ActionChoicesService {
     const lastEntries = recentEntries.slice(-3);
     const recentContext = lastEntries.map(e => {
       const prefix = e.type === 'user_action' ? '[ACTION]' : '[NARRATIVE]';
-      return `${prefix} ${e.content.substring(0, 300)}${e.content.length > 300 ? '...' : ''}`;
+      return `${prefix} ${e.content}`;
     }).join('\n');
 
     // Extract user's action examples to learn their style
@@ -125,11 +125,7 @@ Match their vocabulary, tone, and phrasing patterns.`;
       const entryDescriptions = lorebookEntries.slice(0, 12).map(e => {
         let desc = `• ${e.name} (${e.type})`;
         if (e.description) {
-          // Truncate long descriptions
-          const shortDesc = e.description.length > 100
-            ? e.description.slice(0, 100) + '...'
-            : e.description;
-          desc += `: ${shortDesc}`;
+          desc += `: ${e.description}`;
         }
         return desc;
       }).join('\n');
@@ -150,7 +146,7 @@ ${styleGuidance}
 
 ## Current Narrative
 """
-${narrativeResponse.substring(0, 800)}${narrativeResponse.length > 800 ? '...' : ''}
+${narrativeResponse}
 """
 
 ## Recent Context
