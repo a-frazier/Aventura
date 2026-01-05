@@ -247,6 +247,11 @@ class DatabaseService {
     await db.execute(`UPDATE characters SET ${setClauses.join(', ')} WHERE id = ?`, values);
   }
 
+  async deleteCharacter(id: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM characters WHERE id = ?', [id]);
+  }
+
   // Location operations
   async getLocations(storyId: string): Promise<Location[]> {
     const db = await this.getDb();
@@ -348,6 +353,11 @@ class DatabaseService {
     await db.execute(`UPDATE items SET ${setClauses.join(', ')} WHERE id = ?`, values);
   }
 
+  async deleteItem(id: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM items WHERE id = ?', [id]);
+  }
+
   async updateStoryBeat(id: string, updates: Partial<StoryBeat>): Promise<void> {
     const db = await this.getDb();
     const setClauses: string[] = [];
@@ -358,6 +368,7 @@ class DatabaseService {
     if (updates.type !== undefined) { setClauses.push('type = ?'); values.push(updates.type); }
     if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
     if (updates.triggeredAt !== undefined) { setClauses.push('triggered_at = ?'); values.push(updates.triggeredAt); }
+    if (updates.resolvedAt !== undefined) { setClauses.push('resolved_at = ?'); values.push(updates.resolvedAt); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
 
     if (setClauses.length === 0) return;
@@ -378,8 +389,8 @@ class DatabaseService {
   async addStoryBeat(beat: StoryBeat): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO story_beats (id, story_id, title, description, type, status, triggered_at, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO story_beats (id, story_id, title, description, type, status, triggered_at, resolved_at, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         beat.id,
         beat.storyId,
@@ -388,9 +399,15 @@ class DatabaseService {
         beat.type,
         beat.status,
         beat.triggeredAt,
+        beat.resolvedAt ?? null,
         beat.metadata ? JSON.stringify(beat.metadata) : null,
       ]
     );
+  }
+
+  async deleteStoryBeat(id: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM story_beats WHERE id = ?', [id]);
   }
 
   // Template operations
@@ -891,6 +908,7 @@ class DatabaseService {
       type: row.type,
       status: row.status,
       triggeredAt: row.triggered_at,
+      resolvedAt: row.resolved_at ?? null,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
     };
   }

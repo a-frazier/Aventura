@@ -315,6 +315,7 @@ class ExportService {
             type: beat.type,
             status: beat.status,
             triggeredAt: beat.triggeredAt,
+            resolvedAt: beat.resolvedAt ?? null,
             metadata: beat.metadata,
           });
         }

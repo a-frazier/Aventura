@@ -27,6 +27,12 @@ pub fn run() {
             sql: include_str!("../migrations/004_entry_lore_blacklist.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 5,
+            description: "add_story_beats_resolved_at",
+            sql: include_str!("../migrations/005_story_beats_resolved_at.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

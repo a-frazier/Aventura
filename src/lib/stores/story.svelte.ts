@@ -523,6 +523,42 @@ class StoryStore {
     return character;
   }
 
+  // Update an existing character (except protagonist swap)
+  async updateCharacter(id: string, updates: Partial<Character>): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.characters.find(c => c.id === id);
+    if (!existing) throw new Error('Character not found');
+
+    if (updates.relationship !== undefined) {
+      if (updates.relationship === 'self' && existing.relationship !== 'self') {
+        throw new Error('Use setProtagonist to assign a protagonist');
+      }
+      if (existing.relationship === 'self' && updates.relationship !== 'self') {
+        throw new Error('Swap protagonists before changing the current one');
+      }
+    }
+
+    await database.updateCharacter(id, updates);
+    this.characters = this.characters.map(c =>
+      c.id === id ? { ...c, ...updates } : c
+    );
+  }
+
+  // Delete a character (protagonist cannot be deleted)
+  async deleteCharacter(id: string): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.characters.find(c => c.id === id);
+    if (!existing) throw new Error('Character not found');
+    if (existing.relationship === 'self') {
+      throw new Error('Swap protagonists before deleting the current one');
+    }
+
+    await database.deleteCharacter(id);
+    this.characters = this.characters.filter(c => c.id !== id);
+  }
+
   // Add a location
   async addLocation(name: string, description?: string, makeCurrent = false): Promise<Location> {
     if (!this.currentStory) throw new Error('No story loaded');
@@ -547,6 +583,28 @@ class StoryStore {
 
     this.locations = [...this.locations, location];
     return location;
+  }
+
+  // Update a location's details
+  async updateLocation(id: string, updates: Partial<Location>): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.locations.find(l => l.id === id);
+    if (!existing) throw new Error('Location not found');
+
+    if (updates.current === true) {
+      await database.setCurrentLocation(this.currentStory.id, id);
+      this.locations = this.locations.map(l => ({
+        ...l,
+        current: l.id === id,
+        visited: l.id === id ? true : l.visited,
+      }));
+    } else {
+      await database.updateLocation(id, updates);
+      this.locations = this.locations.map(l =>
+        l.id === id ? { ...l, ...updates } : l
+      );
+    }
   }
 
   // Set current location
@@ -608,6 +666,30 @@ class StoryStore {
     return item;
   }
 
+  // Update an existing item
+  async updateItem(id: string, updates: Partial<Item>): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.items.find(i => i.id === id);
+    if (!existing) throw new Error('Item not found');
+
+    await database.updateItem(id, updates);
+    this.items = this.items.map(i =>
+      i.id === id ? { ...i, ...updates } : i
+    );
+  }
+
+  // Delete an item
+  async deleteItem(id: string): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.items.find(i => i.id === id);
+    if (!existing) throw new Error('Item not found');
+
+    await database.deleteItem(id);
+    this.items = this.items.filter(i => i.id !== id);
+  }
+
   // Add a story beat
   async addStoryBeat(title: string, type: StoryBeat['type'], description?: string): Promise<StoryBeat> {
     if (!this.currentStory) throw new Error('No story loaded');
@@ -620,12 +702,80 @@ class StoryStore {
       type,
       status: 'pending',
       triggeredAt: null,
+      resolvedAt: null,
       metadata: null,
     };
 
     await database.addStoryBeat(beat);
     this.storyBeats = [...this.storyBeats, beat];
     return beat;
+  }
+
+  // Update a story beat
+  async updateStoryBeat(id: string, updates: Partial<StoryBeat>): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.storyBeats.find(b => b.id === id);
+    if (!existing) throw new Error('Story beat not found');
+
+    const resolvedUpdates: Partial<StoryBeat> = { ...updates };
+    if (updates.status) {
+      if (updates.status === 'completed' || updates.status === 'failed') {
+        if (updates.resolvedAt === undefined) {
+          resolvedUpdates.resolvedAt = Date.now();
+        }
+      } else if (updates.resolvedAt === undefined) {
+        resolvedUpdates.resolvedAt = null;
+      }
+    }
+
+    await database.updateStoryBeat(id, resolvedUpdates);
+    this.storyBeats = this.storyBeats.map(b =>
+      b.id === id ? { ...b, ...resolvedUpdates } : b
+    );
+  }
+
+  // Delete a story beat
+  async deleteStoryBeat(id: string): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const existing = this.storyBeats.find(b => b.id === id);
+    if (!existing) throw new Error('Story beat not found');
+
+    await database.deleteStoryBeat(id);
+    this.storyBeats = this.storyBeats.filter(b => b.id !== id);
+  }
+
+  // Swap the protagonist to another character, updating the old label
+  async setProtagonist(newCharacterId: string, previousRelationshipLabel?: string): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    const currentProtagonist = this.characters.find(c => c.relationship === 'self') ?? null;
+    const newProtagonist = this.characters.find(c => c.id === newCharacterId);
+    if (!newProtagonist) throw new Error('Character not found');
+
+    if (currentProtagonist?.id === newCharacterId) return;
+
+    let label: string | null = null;
+    if (currentProtagonist) {
+      label = previousRelationshipLabel?.trim() ?? null;
+      if (!label || label.toLowerCase() === 'self') {
+        throw new Error('Provide a relationship label for the previous protagonist');
+      }
+      await database.updateCharacter(currentProtagonist.id, { relationship: label });
+    }
+
+    await database.updateCharacter(newCharacterId, { relationship: 'self' });
+
+    this.characters = this.characters.map(c => {
+      if (currentProtagonist && c.id === currentProtagonist.id) {
+        return { ...c, relationship: label! };
+      }
+      if (c.id === newCharacterId) {
+        return { ...c, relationship: 'self' };
+      }
+      return c;
+    });
   }
 
   // ===== Lorebook Entry CRUD Methods =====
