@@ -1001,8 +1001,16 @@ class StoryStore {
         const changes: Partial<Character> = {};
         if (update.changes.status) changes.status = update.changes.status;
         if (update.changes.relationship) changes.relationship = update.changes.relationship;
-        if (update.changes.newTraits?.length) {
-          changes.traits = [...existing.traits, ...update.changes.newTraits];
+        if (update.changes.newTraits?.length || update.changes.removeTraits?.length) {
+          let traits = [...existing.traits];
+          if (update.changes.removeTraits?.length) {
+            const toRemove = new Set(update.changes.removeTraits.map(t => t.toLowerCase()));
+            traits = traits.filter(t => !toRemove.has(t.toLowerCase()));
+          }
+          if (update.changes.newTraits?.length) {
+            traits = [...traits, ...update.changes.newTraits];
+          }
+          changes.traits = traits;
         }
         await database.updateCharacter(existing.id, changes);
         this.characters = this.characters.map(c =>

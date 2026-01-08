@@ -42,6 +42,7 @@ export interface CharacterUpdate {
     status?: 'active' | 'inactive' | 'deceased';
     relationship?: string;
     newTraits?: string[];
+    removeTraits?: string[];
   };
 }
 
@@ -197,7 +198,12 @@ export class ClassifierService {
   }
 
   private buildClassificationPrompt(context: ClassificationContext): string {
-    const existingCharacterNames = context.existingCharacters.map(c => c.name);
+    // Include traits for characters so the classifier can decide when to prune
+    const existingCharacterInfo = context.existingCharacters.map(c => {
+      const traits = c.traits ?? [];
+      if (traits.length === 0) return c.name;
+      return `${c.name} [${traits.join(', ')}]`;
+    });
     const existingLocationNames = context.existingLocations.map(l => l.name);
     const existingItemNames = context.existingItems.map(i => i.name);
     const isCreativeMode = context.storyMode === 'creative-writing';
@@ -225,7 +231,7 @@ export class ClassifierService {
 ## Context
 ${context.genre ? `Genre: ${context.genre}` : ''}
 Mode: ${isCreativeMode ? 'Creative Writing (author directing the story)' : 'Adventure (player as protagonist)'}
-Already tracking: ${existingCharacterNames.length} characters, ${existingLocationNames.length} locations, ${existingItemNames.length} items
+Already tracking: ${existingCharacterInfo.length} characters, ${existingLocationNames.length} locations, ${existingItemNames.length} items
 
 ## ${inputLabel}
 "${context.userAction}"
@@ -236,7 +242,7 @@ ${context.narrativeResponse}
 """
 
 ## Already Known Entities (check before adding duplicates)
-Characters: ${existingCharacterNames.length > 0 ? existingCharacterNames.join(', ') : '(none)'}
+Characters: ${existingCharacterInfo.length > 0 ? existingCharacterInfo.join(', ') : '(none)'}
 Locations: ${existingLocationNames.length > 0 ? existingLocationNames.join(', ') : '(none)'}
 Items: ${existingItemNames.length > 0 ? existingItemNames.join(', ') : '(none)'}
 
@@ -270,7 +276,10 @@ ${existingBeatsList || '(none)'}
 
 ### Field Specifications
 
-characterUpdates: [{"name": "ExistingName", "changes": {"status": "active|inactive|deceased", "relationship": "new relationship", "newTraits": ["trait"]}}]
+characterUpdates: [{"name": "ExistingName", "changes": {"status": "active|inactive|deceased", "relationship": "new relationship", "newTraits": ["trait"], "removeTraits": ["trait"]}}]
+- Traits should be concise phrases (6 words max)
+- Use "removeTraits" when a character loses, overcomes, or no longer exhibits a trait (e.g., "cowardly" after an act of bravery, "injured" after healing)
+- Also use "removeTraits" to prune redundant, outdated, or less important traits when a character has accumulated too many (aim to keep around 6 traits per character; if a character has 8+ traits, proactively remove the least relevant ones)
 
 locationUpdates: [{"name": "ExistingName", "changes": {"visited": true, "current": true, "descriptionAddition": "new detail learned"}}]
 
@@ -282,6 +291,7 @@ storyBeatUpdates: [{"title": "ExistingBeatTitle", "changes": {"status": "complet
 - Clean up old beats that are no longer relevant to the current story
 
 newCharacters: [{"name": "ProperName", "description": "one sentence", "relationship": "friend|enemy|ally|neutral|unknown", "traits": ["trait1"]}]
+- Keep traits concise (6 words max each) and limit to 2-4 key traits per new character
 
 newLocations: [{"name": "ProperName", "description": "one sentence", "visited": true, "current": false}]
 
