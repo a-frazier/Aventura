@@ -1040,6 +1040,8 @@ class SettingsStore {
         this.applyTheme(theme as ThemeId);
       }
       if (fontSize) this.uiSettings.fontSize = fontSize as 'small' | 'medium' | 'large';
+      // Apply font size immediately (uses default 'medium' if not stored)
+      this.applyFontSize(this.uiSettings.fontSize);
       if (showWordCount) this.uiSettings.showWordCount = showWordCount === 'true';
       if (autoSave) this.uiSettings.autoSave = autoSave === 'true';
       if (spellcheckEnabled !== null) this.uiSettings.spellcheckEnabled = spellcheckEnabled === 'true';
@@ -1614,9 +1616,17 @@ class SettingsStore {
     this.applyTheme(theme);
   }
 
+  /**
+   * Apply font size to the DOM using data-font-size attribute
+   */
+  private applyFontSize(size: 'small' | 'medium' | 'large') {
+    document.documentElement.setAttribute('data-font-size', size);
+  }
+
   async setFontSize(size: 'small' | 'medium' | 'large') {
     this.uiSettings.fontSize = size;
     await database.setSetting('font_size', size);
+    this.applyFontSize(size);
   }
 
   async setSpellcheckEnabled(enabled: boolean) {
@@ -1841,8 +1851,9 @@ class SettingsStore {
     await this.saveSystemServicesSettings();
     await this.saveUpdateSettings();
 
-    // Apply theme
+    // Apply theme and font size
     this.applyTheme(this.uiSettings.theme);
+    this.applyFontSize(this.uiSettings.fontSize);
   }
 
   // Provider preset methods
