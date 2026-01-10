@@ -44,13 +44,6 @@ class PromptService {
    * @param settings - Saved prompt settings (overrides, custom macros)
    */
   init(settings: PromptSettings): void {
-    console.log('[PromptService] init called', {
-      customMacrosCount: settings.customMacros.length,
-      macroOverridesCount: settings.macroOverrides.length,
-      templateOverridesCount: settings.templateOverrides.length,
-      templateOverrideIds: settings.templateOverrides.map(o => o.templateId),
-    });
-
     // Register custom macros
     macroEngine.setCustomMacros(settings.customMacros);
 
@@ -61,7 +54,6 @@ class PromptService {
     this.templateOverrides.clear();
     for (const override of settings.templateOverrides) {
       this.templateOverrides.set(override.templateId, override.content);
-      console.log(`[PromptService] Registered override for '${override.templateId}', content length: ${override.content.length}`);
     }
 
     this.initialized = true;
@@ -109,14 +101,7 @@ class PromptService {
     }
 
     // Use override content if available, otherwise use default
-    const hasOverride = this.templateOverrides.has(templateId);
     const content = this.templateOverrides.get(templateId) ?? template.content;
-
-    console.log(`[PromptService] getPrompt('${templateId}')`, {
-      hasOverride,
-      contentLength: content.length,
-      contentPreview: content.substring(0, 100) + '...',
-    });
 
     // Expand all macros
     return macroEngine.expand(content, context, storyOverrides);
@@ -143,15 +128,7 @@ class PromptService {
       return '';
     }
 
-    const hasOverride = this.templateOverrides.has(templateId);
     const content = this.templateOverrides.get(templateId) ?? template.content;
-
-    console.log(`[PromptService] renderPrompt('${templateId}')`, {
-      hasOverride,
-      contentLength: content.length,
-      contentPreview: content.substring(0, 100) + '...',
-    });
-
     const expanded = macroEngine.expand(content, context, storyOverrides);
     return this.applyPlaceholders(expanded, placeholders);
   }

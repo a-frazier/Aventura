@@ -97,6 +97,8 @@ export interface StorySettings {
   systemPromptOverride?: string;
   pov?: POV;
   tense?: Tense;
+  tone?: string;
+  themes?: string[];
 }
 
 export interface StoryEntry {

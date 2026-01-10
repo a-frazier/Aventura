@@ -108,8 +108,8 @@ class AIService {
     const tense = story?.settings?.tense ?? (mode === 'creative-writing' ? 'past' : 'present');
     const protagonist = worldState.characters.find(c => c.relationship === 'self');
     const protagonistName = protagonist?.name || 'the protagonist';
-    const systemPrompt = this.buildSystemPrompt(worldState, story?.templateId, undefined, mode, undefined, systemPromptOverride, promptPov, tense, story?.timeTracker);
-    log('System prompt built, length:', systemPrompt.length, 'mode:', mode, 'pov:', promptPov, 'tense:', tense);
+    const systemPrompt = this.buildSystemPrompt(worldState, story?.templateId, undefined, mode, undefined, systemPromptOverride, promptPov, tense, story?.timeTracker, story?.genre, story?.description, story?.settings?.tone, story?.settings?.themes);
+    log('System prompt built, length:', systemPrompt.length, 'mode:', mode, 'pov:', promptPov, 'tense:', tense, 'genre:', story?.genre, 'tone:', story?.settings?.tone);
 
     // Build conversation history
     const messages: Message[] = [
@@ -239,7 +239,11 @@ class AIService {
       systemPromptOverride,
       promptPov,
       tense,
-      story?.timeTracker
+      story?.timeTracker,
+      story?.genre,
+      story?.description,
+      story?.settings?.tone,
+      story?.settings?.themes
     );
 
     // Inject chapter summaries if chapters exist
@@ -1034,7 +1038,11 @@ class AIService {
     systemPromptOverride?: string,
     pov?: 'first' | 'second' | 'third',
     tense: 'past' | 'present' = 'present',
-    timeTracker?: TimeTracker | null
+    timeTracker?: TimeTracker | null,
+    genre?: string | null,
+    settingDescription?: string | null,
+    tone?: string | null,
+    themes?: string[] | null
   ): string {
     const protagonist = worldState.characters.find(c => c.relationship === 'self');
     const protagonistName = protagonist?.name || 'the protagonist';
@@ -1047,6 +1055,10 @@ class AIService {
       protagonistName,
       currentLocation: worldState.currentLocation?.name,
       storyTime: formatStoryTime(timeTracker),
+      genre: genre ?? undefined,
+      settingDescription: settingDescription ?? undefined,
+      tone: tone ?? undefined,
+      themes: themes ?? undefined,
     };
 
     // Determine the base prompt source
@@ -1054,8 +1066,17 @@ class AIService {
     let useLegacyInjection = false;
     let promptSource = 'none';
 
-    if (systemPromptOverride) {
-      // User/wizard-provided override - check if it has macros
+    // Check if user has customized the global template for this mode
+    const globalTemplateId = mode === 'creative-writing' ? 'creative-writing' : 'adventure';
+    const hasGlobalTemplateOverride = promptService.hasTemplateOverride(globalTemplateId);
+
+    if (hasGlobalTemplateOverride) {
+      // User customized the global template - always prefer that over per-story overrides
+      basePrompt = promptService.getPrompt(globalTemplateId, promptContext);
+      useLegacyInjection = false;
+      promptSource = `promptService:${globalTemplateId} (global override)`;
+    } else if (systemPromptOverride) {
+      // User/wizard-provided per-story override - check if it has macros
       basePrompt = systemPromptOverride;
       useLegacyInjection = !this.promptHasMacros(basePrompt);
       promptSource = 'systemPromptOverride';
@@ -1069,26 +1090,27 @@ class AIService {
       }
     }
 
-    // If no override/template, use the centralized prompt service
+    // If still no prompt, use the centralized prompt service defaults
     if (!basePrompt) {
-      // Get prompt from centralized service (macros are expanded automatically)
-      const templateId = mode === 'creative-writing' ? 'creative-writing' : 'adventure';
-      basePrompt = promptService.getPrompt(templateId, promptContext);
-      useLegacyInjection = false; // Macros handled by promptService
-      promptSource = `promptService:${templateId}`;
-    } else {
-      // Expand any macros in the override/template prompt
+      basePrompt = promptService.getPrompt(globalTemplateId, promptContext);
+      useLegacyInjection = false;
+      promptSource = `promptService:${globalTemplateId} (default)`;
+    } else if (useLegacyInjection) {
+      // Only expand macros if we're using a legacy prompt (systemPromptOverride or BUILTIN_TEMPLATE)
       basePrompt = promptService.expandMacros(basePrompt, promptContext);
     }
 
     log('buildSystemPrompt', {
       mode,
       templateId,
+      genre,
+      tone,
+      themes,
+      settingDescription: settingDescription?.substring(0, 50),
+      hasGlobalTemplateOverride,
       hasSystemPromptOverride: !!systemPromptOverride,
-      systemPromptOverrideLength: systemPromptOverride?.length,
       promptSource,
       basePromptLength: basePrompt.length,
-      useLegacyInjection,
     });
 
     // Legacy injection: add style and response instructions if not present

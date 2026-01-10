@@ -204,6 +204,16 @@ export class MacroEngine {
           return context.currentLocation || macro.defaultValue;
         case 'storyTime':
           return context.storyTime || macro.defaultValue;
+        case 'genre':
+          return context.genre || macro.defaultValue;
+        case 'tone':
+          return context.tone || macro.defaultValue;
+        case 'settingDescription':
+          return context.settingDescription || macro.defaultValue;
+        case 'themes':
+          return context.themes?.join(', ') || macro.defaultValue;
+        case 'storyContextBlock':
+          return this.buildStoryContextBlock(context);
         default:
           // Unknown dynamic macro, fall through to default
           break;
@@ -211,6 +221,33 @@ export class MacroEngine {
     }
 
     return macro.defaultValue;
+  }
+
+  /**
+   * Build the story context block from available context values.
+   * Only includes sections that have values.
+   */
+  private buildStoryContextBlock(context: PromptContext): string {
+    const lines: string[] = [];
+
+    if (context.genre) {
+      lines.push(`- Genre: ${context.genre}`);
+    }
+    if (context.tone) {
+      lines.push(`- Tone: ${context.tone}`);
+    }
+    if (context.settingDescription) {
+      lines.push(`- Setting: ${context.settingDescription}`);
+    }
+    if (context.themes && context.themes.length > 0) {
+      lines.push(`- Themes: ${context.themes.join(', ')}`);
+    }
+
+    if (lines.length === 0) {
+      return '';
+    }
+
+    return `# Story Context\n${lines.join('\n')}`;
   }
 
   /**

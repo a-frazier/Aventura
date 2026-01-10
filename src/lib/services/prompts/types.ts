@@ -143,6 +143,13 @@ export interface PromptContext {
   protagonistName: string;
   currentLocation?: string;
   storyTime?: string;
+
+  // Genre and wizard-generated context
+  genre?: string;
+  tone?: string;
+  settingDescription?: string;
+  themes?: string[];
+
   /**
    * Additional custom values for user-defined macros.
    * Key is the macro token, value is the resolved text.

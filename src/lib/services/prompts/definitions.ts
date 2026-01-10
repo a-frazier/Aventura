@@ -44,6 +44,61 @@ const storyTimeMacro: SimpleMacro = {
   defaultValue: '',
 };
 
+const genreMacro: SimpleMacro = {
+  id: 'genre',
+  name: 'Genre',
+  token: 'genre',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'The story genre (e.g., Fantasy, Science Fiction, Mystery)',
+  defaultValue: '',
+};
+
+const toneMacro: SimpleMacro = {
+  id: 'tone',
+  name: 'Tone',
+  token: 'tone',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'The writing tone/style (e.g., dark, lighthearted, suspenseful)',
+  defaultValue: '',
+};
+
+const settingDescriptionMacro: SimpleMacro = {
+  id: 'setting-description',
+  name: 'Setting Description',
+  token: 'settingDescription',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'Description of the story world/setting',
+  defaultValue: '',
+};
+
+const themesMacro: SimpleMacro = {
+  id: 'themes',
+  name: 'Themes',
+  token: 'themes',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'Story themes and motifs (comma-separated)',
+  defaultValue: '',
+};
+
+const storyContextBlockMacro: SimpleMacro = {
+  id: 'story-context-block',
+  name: 'Story Context Block',
+  token: 'storyContextBlock',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'Formatted block containing genre, tone, setting, and themes (only shows if values are present)',
+  defaultValue: '',
+};
+
 // ============================================================================
 // BUILTIN COMPLEX MACROS
 // ============================================================================
@@ -328,6 +383,11 @@ export const BUILTIN_MACROS: Macro[] = [
   protagonistNameMacro,
   currentLocationMacro,
   storyTimeMacro,
+  genreMacro,
+  toneMacro,
+  settingDescriptionMacro,
+  themesMacro,
+  storyContextBlockMacro,
   // Complex macros
   styleInstructionMacro,
   responseInstructionMacro,
@@ -443,6 +503,8 @@ const adventurePromptTemplate: PromptTemplate = {
   content: `# Role
 You are a veteran game master with decades of tabletop RPG experience. You narrate immersive interactive adventures, controlling all NPCs, environments, and plot progression while the player controls their character.
 
+{{storyContextBlock}}
+
 # Style Requirements
 <style_instruction>
 {{styleInstruction}}
@@ -531,6 +593,8 @@ const creativeWritingPromptTemplate: PromptTemplate = {
 You are an experienced fiction writer with a talent for literary prose. You collaborate with an author who directs the story, and you write the prose.
 
 CRITICAL DISTINCTION: The person giving you directions is the AUTHOR, not a character. They sit outside the story, directing what happens. They are NOT the protagonist. When the author says "I go to the store," they mean "write the protagonist going to the store"—the author is directing, not roleplaying.
+
+{{storyContextBlock}}
 
 # Style Requirements
 <style_instruction>

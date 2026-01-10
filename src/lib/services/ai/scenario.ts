@@ -1028,7 +1028,7 @@ class ScenarioService {
     title: string;
     genre: string;
     mode: StoryMode;
-    settings: { pov: POV; tense: Tense };
+    settings: { pov: POV; tense: Tense; tone?: string; themes?: string[] };
     protagonist: Partial<Character>;
     startingLocation: Partial<Location>;
     initialItems: Partial<Item>[];
@@ -1046,7 +1046,12 @@ class ScenarioService {
       title: opening.title || wizardData.title,
       genre: genreLabel,
       mode,
-      settings: { pov: writingStyle.pov, tense: writingStyle.tense },
+      settings: {
+        pov: writingStyle.pov,
+        tense: writingStyle.tense,
+        tone: writingStyle.tone,
+        themes: expandedSetting?.themes,
+      },
       protagonist: {
         name: protagonist?.name || (writingStyle.pov === 'second' ? 'You' : 'The Protagonist'),
         description: protagonist?.description,
