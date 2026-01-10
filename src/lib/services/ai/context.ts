@@ -9,6 +9,7 @@
  */
 
 import type { Character, Location, Item, StoryBeat, StoryEntry, Chapter } from '$lib/types';
+import { settings } from '$lib/stores/settings.svelte';
 import type { OpenAIProvider as OpenAIProvider } from './openrouter';
 
 const DEBUG = true;
@@ -161,6 +162,7 @@ export class ContextBuilder {
         metadata: {
           relationship: char.relationship,
           traits: char.traits,
+          visualDescriptors: char.visualDescriptors,
         },
       });
     }
@@ -231,7 +233,7 @@ export class ContextBuilder {
           description: char.description,
           tier: 2,
           priority: 60,
-          metadata: { relationship: char.relationship, traits: char.traits },
+          metadata: { relationship: char.relationship, traits: char.traits, visualDescriptors: char.visualDescriptors },
         });
       }
     }
@@ -340,11 +342,15 @@ Example: [1, 3, 7]
 
 If no entries are relevant, return: []`;
 
+    const entrySettings = settings.systemServicesSettings.entryRetrieval;
+    const tier3Model = entrySettings?.model || 'x-ai/grok-4.1-fast';
+    const tier3Temperature = entrySettings?.temperature ?? 0.1;
+
     try {
       const response = await this.provider.generateResponse({
         messages: [{ role: 'user', content: prompt }],
-        model: 'google/gemini-2.0-flash-001', // Fast model for selection
-        temperature: 0.1,
+        model: tier3Model,
+        temperature: tier3Temperature,
         maxTokens: 8192,
       });
 
@@ -439,6 +445,11 @@ If no entries are relevant, return: []`;
           description: char.description,
           tier: 3,
           priority: 0,
+          metadata: {
+            relationship: char.relationship,
+            traits: char.traits,
+            visualDescriptors: char.visualDescriptors,
+          },
         });
       }
     }
@@ -519,6 +530,9 @@ If no entries are relevant, return: []`;
         }
         if (char.metadata?.traits && char.metadata.traits.length > 0) {
           block += ` [${char.metadata.traits.join(', ')}]`;
+        }
+        if (char.metadata?.visualDescriptors && char.metadata.visualDescriptors.length > 0) {
+          block += ` {Appearance: ${char.metadata.visualDescriptors.join(', ')}}`;
         }
       }
     }

@@ -70,6 +70,12 @@ pub fn run() {
             sql: include_str!("../migrations/010_chapter_time_fields.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 11,
+            description: "add_image_generation",
+            sql: include_str!("../migrations/011_image_generation.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

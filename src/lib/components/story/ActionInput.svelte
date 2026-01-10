@@ -4,8 +4,10 @@
   import { story } from '$lib/stores/story.svelte';
   import { settings } from '$lib/stores/settings.svelte';
   import { aiService } from '$lib/services/ai';
+  import { database } from '$lib/services/database';
   import { SimpleActivationTracker } from '$lib/services/ai/entryRetrieval';
-  import { Send, Wand2, MessageSquare, Brain, Sparkles, Feather, RefreshCw, X, PenLine, Square } from 'lucide-svelte';
+  import type { ImageGenerationContext } from '$lib/services/ai/imageGeneration';
+  import { Send, Wand2, MessageSquare, Brain, Sparkles, Feather, RefreshCw, X, PenLine, Square, ImageIcon } from 'lucide-svelte';
   import type { Chapter } from '$lib/types';
   import Suggestions from './Suggestions.svelte';
   import GrammarCheck from './GrammarCheck.svelte';
@@ -27,9 +29,30 @@
   let isRawActionChoice = $state(false); // True when submitting an AI-generated choice (no prefix/suffix)
   let stopRequested = false;
   let activeAbortController: AbortController | null = null;
+  let lastImageGenContext = $state<ImageGenerationContext | null>(null);
+  let isManualImageGenRunning = $state(false);
+
+  const canShowManualImageGen = $derived(
+    settings.systemServicesSettings.imageGeneration.enabled
+      && !settings.systemServicesSettings.imageGeneration.autoGenerate
+      && !!lastImageGenContext
+  );
+
+  const manualImageGenDisabled = $derived(
+    ui.isGenerating
+      || isManualImageGenRunning
+      || !settings.systemServicesSettings.imageGeneration.nanoGptApiKey
+  );
 
   // In creative writing mode, show different input style
   const isCreativeMode = $derived(story.storyMode === 'creative-writing');
+
+  $effect(() => {
+    const storyId = story.currentStory?.id ?? null;
+    if (!storyId || (lastImageGenContext && lastImageGenContext.storyId !== storyId)) {
+      lastImageGenContext = null;
+    }
+  });
 
   // Register retry callback with UI store so StoryEntry can trigger it
   $effect(() => {
@@ -109,6 +132,20 @@
     // Focus the input
     const input = document.querySelector('textarea');
     input?.focus();
+  }
+
+  async function handleManualImageGeneration() {
+    if (!lastImageGenContext || manualImageGenDisabled) return;
+    if (!settings.systemServicesSettings.imageGeneration.enabled) return;
+
+    isManualImageGenRunning = true;
+    try {
+      await aiService.generateImagesForNarrative(lastImageGenContext);
+    } catch (error) {
+      log('Manual image generation failed (non-fatal)', error);
+    } finally {
+      isManualImageGenRunning = false;
+    }
   }
 
   /**
@@ -761,6 +798,42 @@
           // Phase 4: Apply classification results to world state
           await story.applyClassificationResult(classificationResult);
           log('World state updated from classification');
+
+          // Phase 9: Generate images for imageable scenes (background, non-blocking)
+          // This runs inside the classification try block because we need the presentCharacterNames
+          if (currentStoryRef && settings.systemServicesSettings.imageGeneration.enabled) {
+            // Get updated characters from story (includes visual descriptors updates)
+            const presentCharacters = story.characters.filter(c =>
+              classificationResult.scene.presentCharacterNames.includes(c.name) ||
+              c.relationship === 'self'
+            );
+
+            // Build full chat history for image generation context
+            const imageGenChatHistory = story.visibleEntries
+              .filter(e => e.type === 'user_action' || e.type === 'narration')
+              .map(e => `${e.type === 'user_action' ? 'USER' : 'ASSISTANT'}:\n${e.content}`)
+              .join('\n\n');
+
+            const imageGenContext: ImageGenerationContext = {
+              storyId: currentStoryRef.id,
+              entryId: narrationEntry.id,
+              narrativeResponse: fullResponse,
+              userAction: userActionContent,
+              presentCharacters,
+              currentLocation: classificationResult.scene.currentLocationName ?? worldState.currentLocation?.name,
+              chatHistory: imageGenChatHistory,
+              lorebookContext: lorebookContext ?? undefined,
+            };
+
+            // Store for manual generation if auto-generate is disabled
+            lastImageGenContext = imageGenContext;
+
+            if (settings.systemServicesSettings.imageGeneration.autoGenerate && aiService.isImageGenerationEnabled()) {
+              aiService.generateImagesForNarrative(imageGenContext).catch(err => {
+                log('Image generation failed (non-fatal)', err);
+              });
+            }
+          }
         } catch (classifyError) {
           // Classification failure shouldn't break the main flow
           log('Classification failed (non-fatal)', classifyError);
@@ -874,6 +947,8 @@
     // Create a backup of the current state BEFORE adding the user action
     // This allows "retry last message" to restore to this exact point
     if (story.currentStory) {
+      // Fetch embedded images for backup (they're not in the story store)
+      const embeddedImages = await database.getEmbeddedImagesForStory(story.currentStory.id);
       ui.createRetryBackup(
         story.currentStory.id,
         story.entries,
@@ -882,6 +957,7 @@
         story.items,
         story.storyBeats,
         story.lorebookEntries,
+        embeddedImages,
         content,
         rawInput,
         actionType,
@@ -964,6 +1040,7 @@
           items: backup.items,
           storyBeats: backup.storyBeats,
           lorebookEntries: backup.lorebookEntries,
+          embeddedImages: backup.embeddedImages,
           timeTracker: backup.timeTracker,
         });
       } else {
@@ -982,10 +1059,12 @@
             itemIds: backup.itemIds,
             storyBeatIds: backup.storyBeatIds,
             lorebookEntryIds: backup.lorebookEntryIds,
+            embeddedImageIds: backup.embeddedImageIds,
           });
         } else {
           log('Persistent stop restore: skipping entity cleanup (no ID snapshot)');
         }
+        await story.restoreCharacterSnapshots(backup.characterSnapshots);
 
         // Restore time tracker snapshot after persistent cleanup
         await story.restoreTimeTrackerSnapshot(backup.timeTracker);
@@ -1070,6 +1149,25 @@
       return;
     }
 
+    // Debug: Log character state before restore
+    const currentCharDescriptors = story.characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    const backupCharDescriptors = backup.characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    log('RETRY DEBUG - Before restore:', {
+      hasFullState: backup.hasFullState,
+      currentCharDescriptors,
+      backupCharDescriptors,
+      characterSnapshots: backup.characterSnapshots?.map(s => ({
+        id: s.id,
+        visualDescriptors: s.visualDescriptors,
+      })),
+    });
+
     log('Restoring from backup and regenerating', {
       hasFullState: backup.hasFullState,
       backupEntriesCount: backup.entries.length,
@@ -1102,6 +1200,7 @@
           items: backup.items,
           storyBeats: backup.storyBeats,
           lorebookEntries: backup.lorebookEntries,
+          embeddedImages: backup.embeddedImages,
           timeTracker: backup.timeTracker,
         });
       } else {
@@ -1121,10 +1220,12 @@
             itemIds: backup.itemIds,
             storyBeatIds: backup.storyBeatIds,
             lorebookEntryIds: backup.lorebookEntryIds,
+            embeddedImageIds: backup.embeddedImageIds,
           });
         } else {
           log('Persistent restore: skipping entity cleanup (no ID snapshot)');
         }
+        await story.restoreCharacterSnapshots(backup.characterSnapshots);
 
         // Restore time tracker snapshot after persistent cleanup
         await story.restoreTimeTrackerSnapshot(backup.timeTracker);
@@ -1132,6 +1233,15 @@
 
       // Wait for state to sync
       await tick();
+
+      // Debug: Log character state after restore
+      const postRestoreCharDescriptors = story.characters.map(c => ({
+        name: c.name,
+        visualDescriptors: [...c.visualDescriptors],
+      }));
+      log('RETRY DEBUG - After restore:', {
+        postRestoreCharDescriptors,
+      });
 
       // Re-add the user action
       const userActionEntry = await story.addEntry('user_action', backup.userActionContent);
@@ -1348,6 +1458,22 @@
           <Send class="h-5 w-5" />
         </button>
       {/if}
+    </div>
+  {/if}
+
+  {#if canShowManualImageGen}
+    <div class="flex justify-end">
+      <button
+        onclick={handleManualImageGeneration}
+        disabled={manualImageGenDisabled}
+        class="btn btn-secondary text-xs flex items-center gap-1.5"
+        title={manualImageGenDisabled && !settings.systemServicesSettings.imageGeneration.nanoGptApiKey
+          ? 'Add a NanoGPT API key in Settings to generate images'
+          : 'Generate images for the last narration'}
+      >
+        <ImageIcon class="h-4 w-4" />
+        {isManualImageGenRunning ? 'Generating...' : 'Generate Images'}
+      </button>
     </div>
   {/if}
 </div>

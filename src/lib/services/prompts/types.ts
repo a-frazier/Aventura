@@ -107,8 +107,9 @@ export interface ContextPlaceholder {
  * - story: Main narrative prompts (adventure, creative-writing)
  * - service: Supporting service prompts (classifier, suggestions, etc.)
  * - wizard: Story wizard prompts (setting expansion, character generation, etc.)
+ * - image-style: Image generation style prompts (soft anime, semi-realistic, etc.)
  */
-export type PromptCategory = 'story' | 'service' | 'wizard';
+export type PromptCategory = 'story' | 'service' | 'wizard' | 'image-style';
 
 /**
  * Prompt template definition

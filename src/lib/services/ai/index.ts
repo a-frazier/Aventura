@@ -12,6 +12,7 @@ import { AgenticRetrievalService, type AgenticRetrievalSettings, type AgenticRet
 import { TimelineFillService, type TimelineFillSettings, type TimelineFillResult } from './timelineFill';
 import { ContextBuilder, type ContextResult, type ContextConfig, DEFAULT_CONTEXT_CONFIG } from './context';
 import { EntryRetrievalService, getEntryRetrievalConfigFromSettings, type EntryRetrievalResult, type ActivationTracker } from './entryRetrieval';
+import { ImageGenerationService, type ImageGenerationContext } from './imageGeneration';
 import { buildExtraBody } from './requestOverrides';
 import type { Message, GenerationResponse, StreamChunk } from './types';
 import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, MemoryConfig, Entry, LoreManagementResult, TimeTracker } from '$lib/types';
@@ -897,6 +898,42 @@ class AIService {
   }
 
   /**
+   * Check if image generation is enabled and configured.
+   */
+  isImageGenerationEnabled(): boolean {
+    return ImageGenerationService.isEnabled();
+  }
+
+  /**
+   * Generate images for a narrative response.
+   * Identifies imageable scenes and queues async image generation.
+   * This runs in background and doesn't block the main flow.
+   *
+   * @param context - The narrative context for image generation
+   */
+  async generateImagesForNarrative(context: ImageGenerationContext): Promise<void> {
+    log('generateImagesForNarrative called', {
+      storyId: context.storyId,
+      entryId: context.entryId,
+      narrativeLength: context.narrativeResponse.length,
+    });
+
+    if (!this.isImageGenerationEnabled()) {
+      log('Image generation not enabled or not configured');
+      return;
+    }
+
+    try {
+      const provider = this.getProviderForProfile(settings.systemServicesSettings.imageGeneration.promptProfileId);
+      const imageService = new ImageGenerationService(provider);
+      await imageService.generateForNarrative(context);
+    } catch (error) {
+      log('Image generation failed (non-fatal)', error);
+      // Don't throw - image generation failure shouldn't break the main flow
+    }
+  }
+
+  /**
    * Build a block containing chapter summaries for injection into the system prompt.
    * Per design doc: summarized entries are excluded from direct context,
    * but their summaries provide narrative continuity.
@@ -1015,17 +1052,20 @@ class AIService {
     // Determine the base prompt source
     let basePrompt = '';
     let useLegacyInjection = false;
+    let promptSource = 'none';
 
     if (systemPromptOverride) {
       // User/wizard-provided override - check if it has macros
       basePrompt = systemPromptOverride;
       useLegacyInjection = !this.promptHasMacros(basePrompt);
+      promptSource = 'systemPromptOverride';
     } else if (templateId && mode === 'adventure') {
       // Template-specific system prompt
       const template = BUILTIN_TEMPLATES.find(t => t.id === templateId);
       if (template?.systemPrompt) {
         basePrompt = template.systemPrompt;
         useLegacyInjection = !this.promptHasMacros(basePrompt);
+        promptSource = `BUILTIN_TEMPLATE:${templateId}`;
       }
     }
 
@@ -1035,10 +1075,21 @@ class AIService {
       const templateId = mode === 'creative-writing' ? 'creative-writing' : 'adventure';
       basePrompt = promptService.getPrompt(templateId, promptContext);
       useLegacyInjection = false; // Macros handled by promptService
+      promptSource = `promptService:${templateId}`;
     } else {
       // Expand any macros in the override/template prompt
       basePrompt = promptService.expandMacros(basePrompt, promptContext);
     }
+
+    log('buildSystemPrompt', {
+      mode,
+      templateId,
+      hasSystemPromptOverride: !!systemPromptOverride,
+      systemPromptOverrideLength: systemPromptOverride?.length,
+      promptSource,
+      basePromptLength: basePrompt.length,
+      useLegacyInjection,
+    });
 
     // Legacy injection: add style and response instructions if not present
     if (useLegacyInjection) {

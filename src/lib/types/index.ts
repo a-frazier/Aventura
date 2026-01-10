@@ -47,8 +47,18 @@ export interface PersistentRetryState {
   itemIds: string[];
   storyBeatIds: string[];
   lorebookEntryIds: string[];
+  embeddedImageIds?: string[];  // Added in v1.4.0 for image generation
+  characterSnapshots?: PersistentCharacterSnapshot[]; // Added in v1.4.1 for retry state restoration
   // Story time snapshot captured before the user action (optional for backwards compatibility)
   timeTracker?: TimeTracker | null;
+}
+
+export interface PersistentCharacterSnapshot {
+  id: string;
+  traits: string[];
+  status: 'active' | 'inactive' | 'deceased';
+  relationship: string | null;
+  visualDescriptors: string[];
 }
 
 // Persistent style review state - saved per-story for style analysis tracking
@@ -117,6 +127,7 @@ export interface Character {
   description: string | null;
   relationship: string | null;
   traits: string[];
+  visualDescriptors: string[];  // Visual appearance details for image generation (hair, clothing, features)
   status: 'active' | 'inactive' | 'deceased';
   metadata: Record<string, unknown> | null;
 }
@@ -476,4 +487,45 @@ export interface UpdateSettings {
   autoDownload: boolean;     // Automatically download updates
   checkInterval: number;     // Hours between update checks (0 = only on startup)
   lastChecked: number | null; // Timestamp of last check
+}
+
+// ===== Image Generation System =====
+
+export type EmbeddedImageStatus = 'pending' | 'generating' | 'complete' | 'failed';
+
+export interface EmbeddedImage {
+  id: string;
+  storyId: string;
+  entryId: string;
+  sourceText: string;      // Text matched in narrative (case-insensitive)
+  prompt: string;          // Full generation prompt
+  styleId: string;         // Image style template used
+  model: string;           // Image model used
+  imageData: string;       // Base64 encoded image
+  width?: number;
+  height?: number;
+  status: EmbeddedImageStatus;
+  errorMessage?: string;
+  createdAt: number;
+}
+
+export type ImageSize = '512x512' | '1024x1024';
+
+export interface ImageGenerationSettings {
+  enabled: boolean;               // Toggle for image generation (default: false)
+  profileId: string | null;       // API profile to use for image generation
+  model: string;                  // Image model (default: 'z-image-turbo')
+  styleId: string;                // Selected image style template
+  size: ImageSize;                // Image size
+  maxImagesPerMessage: number;    // Max images to generate per narrative (default: 2)
+  autoGenerate: boolean;          // Generate automatically after narration
+
+  // Prompt analysis model settings (for identifying imageable scenes)
+  promptProfileId: string | null; // API profile for prompt analysis
+  promptModel: string;
+  promptTemperature: number;
+  promptMaxTokens: number;
+  reasoningEffort: ReasoningEffort;
+  providerOnly: string[];
+  manualBody: string;
 }

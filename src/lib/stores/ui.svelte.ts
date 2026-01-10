@@ -1,4 +1,4 @@
-import type { ActivePanel, SidebarTab, UIState, EntryType, StoryEntry, Character, Location, Item, StoryBeat, Entry, ActionInputType, PersistentStyleReviewState, PersistentStyleReviewResult, TimeTracker } from '$lib/types';
+import type { ActivePanel, SidebarTab, UIState, EntryType, StoryEntry, Character, Location, Item, StoryBeat, Entry, ActionInputType, PersistentStyleReviewState, PersistentStyleReviewResult, TimeTracker, EmbeddedImage, PersistentCharacterSnapshot } from '$lib/types';
 import type { ActionChoice } from '$lib/services/ai/actionChoices';
 import type { StorySuggestion } from '$lib/services/ai/suggestions';
 import type { StyleReviewResult } from '$lib/services/ai/styleReviewer';
@@ -31,6 +31,7 @@ export interface RetryBackup {
   items: Item[];
   storyBeats: StoryBeat[];
   lorebookEntries: Entry[];
+  embeddedImages: EmbeddedImage[];
   // The user's input to re-trigger
   userActionContent: string;
   rawInput: string;
@@ -51,6 +52,8 @@ export interface RetryBackup {
   itemIds: string[];
   storyBeatIds: string[];
   lorebookEntryIds: string[];
+  embeddedImageIds?: string[];
+  characterSnapshots?: PersistentCharacterSnapshot[];
   // Time tracker snapshot (undefined means "don't restore", null means "clear it")
   timeTracker: TimeTracker | null | undefined;
 }
@@ -109,8 +112,18 @@ class UIStore {
 
   // Computed getter for current story's retry backup
   get retryBackup(): RetryBackup | null {
-    if (!this.currentRetryStoryId) return null;
-    return this.retryBackups.get(this.currentRetryStoryId) ?? null;
+    if (!this.currentRetryStoryId) {
+      console.log('[UI] retryBackup getter: no currentRetryStoryId');
+      return null;
+    }
+    const backup = this.retryBackups.get(this.currentRetryStoryId) ?? null;
+    console.log('[UI] retryBackup getter:', {
+      currentRetryStoryId: this.currentRetryStoryId,
+      hasBackup: !!backup,
+      hasFullState: backup?.hasFullState,
+      backupStoryId: backup?.storyId,
+    });
+    return backup;
   }
 
   /**
@@ -279,6 +292,7 @@ class UIStore {
     items: Item[],
     storyBeats: StoryBeat[],
     lorebookEntries: Entry[],
+    embeddedImages: EmbeddedImage[],
     userActionContent: string,
     rawInput: string,
     actionType: ActionInputType,
@@ -294,18 +308,31 @@ class UIStore {
     const itemIds = items.map(i => i.id);
     const storyBeatIds = storyBeats.map(sb => sb.id);
     const lorebookEntryIds = lorebookEntries.map(le => le.id);
+    const embeddedImageIds = embeddedImages.map(ei => ei.id);
+    const characterSnapshots: PersistentCharacterSnapshot[] = characters.map(c => ({
+      id: c.id,
+      traits: [...(c.traits ?? [])],
+      status: c.status,
+      relationship: c.relationship ?? null,
+      visualDescriptors: [...(c.visualDescriptors ?? [])],
+    }));
 
     // Create new backup and store by story ID
+    // Use JSON.parse(JSON.stringify()) as a belt-and-suspenders approach to ensure
+    // complete isolation from Svelte reactivity proxies
+    const deepClone = <T>(obj: T): T => JSON.parse(JSON.stringify(obj));
     const backup: RetryBackup = {
       storyId,
       timestamp,
-      // Deep copy arrays to avoid mutation issues
-      entries: [...entries],
-      characters: [...characters],
-      locations: [...locations],
-      items: [...items],
-      storyBeats: [...storyBeats],
-      lorebookEntries: [...lorebookEntries],
+      // Deep copy to avoid mutation issues - using JSON serialization to break any proxy chains
+      entries: deepClone(entries),
+      characters: deepClone(characters),
+      locations: deepClone(locations),
+      items: deepClone(items),
+      storyBeats: deepClone(storyBeats),
+      lorebookEntries: deepClone(lorebookEntries),
+      embeddedImages: deepClone(embeddedImages),
+      characterSnapshots,
       userActionContent,
       rawInput,
       actionType,
@@ -323,11 +350,40 @@ class UIStore {
       itemIds,
       storyBeatIds,
       lorebookEntryIds,
+      embeddedImageIds,
       // Time tracker snapshot
       timeTracker: timeTracker ? { ...timeTracker } : null,
     };
+    // Debug: Log character visual descriptors at backup time (before storing)
+    const charDescriptorsAtBackup = characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    const charDescriptorsInBackup = backup.characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    console.log('[UI] BACKUP DEBUG - Character descriptors at creation:', {
+      charDescriptorsAtBackup,
+      charDescriptorsInBackup,
+      areIdentical: JSON.stringify(charDescriptorsAtBackup) === JSON.stringify(charDescriptorsInBackup),
+    });
+
     this.retryBackups.set(storyId, backup);
     this.currentRetryStoryId = storyId;
+
+    // Debug: Verify the stored backup is correct immediately after storing
+    const storedBackup = this.retryBackups.get(storyId);
+    if (storedBackup) {
+      const storedCharDescriptors = storedBackup.characters.map(c => ({
+        name: c.name,
+        visualDescriptors: [...c.visualDescriptors],
+      }));
+      console.log('[UI] BACKUP DEBUG - Verification after store:', {
+        storedCharDescriptors,
+        matchesOriginal: JSON.stringify(storedCharDescriptors) === JSON.stringify(charDescriptorsInBackup),
+      });
+    }
 
     // Persist lightweight version to database (includes entity IDs for full restore)
     this.queueRetryStateWrite(
@@ -343,16 +399,22 @@ class UIStore {
         itemIds,
         storyBeatIds,
         lorebookEntryIds,
+        embeddedImageIds,
+        characterSnapshots,
         timeTracker: timeTracker ? { ...timeTracker } : null,
       }),
       'persist'
     );
 
-    console.log('[UI] Retry backup created', {
+    console.log('[UI] *** IN-MEMORY BACKUP CREATED (hasFullState: true) ***', {
       storyId,
       entriesCount: entries.length,
+      charactersCount: characters.length,
       userAction: userActionContent.substring(0, 50),
-      activationEntries: Object.keys(this.activationData).length,
+      characterSnapshotsForPersist: characterSnapshots.map(s => ({
+        id: s.id,
+        visualDescriptors: s.visualDescriptors,
+      })),
     });
   }
 
@@ -405,13 +467,20 @@ class UIStore {
     itemIds?: string[];
     storyBeatIds?: string[];
     lorebookEntryIds?: string[];
+    embeddedImageIds?: string[];
+    characterSnapshots?: PersistentCharacterSnapshot[];
     timeTracker?: TimeTracker | null;
   }) {
     // Skip if we already have an in-memory backup for this story (it's more complete)
     if (this.retryBackups.has(storyId)) {
-      console.log('[UI] Skipping persistent retry state load - in-memory backup exists', { storyId });
+      const existing = this.retryBackups.get(storyId);
+      console.log('[UI] Skipping persistent retry state load - in-memory backup exists', {
+        storyId,
+        existingHasFullState: existing?.hasFullState,
+      });
       return;
     }
+    console.log('[UI] Loading persistent retry backup (no in-memory backup found)', { storyId });
 
     // Validate required fields exist
     if (
@@ -442,6 +511,7 @@ class UIStore {
       items: [],
       storyBeats: [],
       lorebookEntries: [],
+      embeddedImages: [],
       // User input data
       userActionContent: retryState.userActionContent,
       rawInput: retryState.rawInput,
@@ -460,23 +530,23 @@ class UIStore {
       itemIds: retryState.itemIds ?? [],
       storyBeatIds: retryState.storyBeatIds ?? [],
       lorebookEntryIds: retryState.lorebookEntryIds ?? [],
+      embeddedImageIds: retryState.embeddedImageIds,
+      characterSnapshots: retryState.characterSnapshots,
       // Time tracker snapshot (undefined means "skip restore", null means "clear")
       timeTracker: Object.prototype.hasOwnProperty.call(retryState, 'timeTracker')
         ? retryState.timeTracker ?? null
         : undefined,
     };
     this.retryBackups.set(storyId, backup);
-    console.log('[UI] Retry backup loaded from persistent state', {
+    console.log('[UI] *** PERSISTENT BACKUP LOADED (hasFullState: false) ***', {
       storyId,
       entryCountBeforeAction: retryState.entryCountBeforeAction,
       userAction: retryState.userActionContent.substring(0, 50),
-      entityIds: {
-        characters: backup.characterIds.length,
-        locations: backup.locationIds.length,
-        items: backup.itemIds.length,
-        storyBeats: backup.storyBeatIds.length,
-        lorebookEntries: backup.lorebookEntryIds.length,
-      },
+      characterSnapshotsCount: backup.characterSnapshots?.length ?? 0,
+      characterSnapshots: backup.characterSnapshots?.map(s => ({
+        id: s.id,
+        visualDescriptors: s.visualDescriptors,
+      })),
     });
   }
 
@@ -529,6 +599,9 @@ class UIStore {
           itemIds: backup.itemIds,
           storyBeatIds: backup.storyBeatIds,
           lorebookEntryIds: backup.lorebookEntryIds,
+          embeddedImageIds: backup.embeddedImageIds,
+          characterSnapshots: backup.characterSnapshots,
+          timeTracker: backup.timeTracker,
         }),
         'update'
       );

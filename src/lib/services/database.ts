@@ -17,6 +17,8 @@ import type {
   PersistentRetryState,
   PersistentStyleReviewState,
   TimeTracker,
+  EmbeddedImage,
+  EmbeddedImageStatus,
 } from '$lib/types';
 
 class DatabaseService {
@@ -164,6 +166,16 @@ class DatabaseService {
    */
   async saveRetryState(storyId: string, retryState: PersistentRetryState): Promise<void> {
     const db = await this.getDb();
+    console.log('[Database] Saving retry state', {
+      storyId,
+      hasCharacterSnapshots: !!retryState.characterSnapshots,
+      characterSnapshotsCount: retryState.characterSnapshots?.length ?? 0,
+      characterSnapshots: retryState.characterSnapshots?.map(s => ({
+        id: s.id,
+        visualDescriptors: s.visualDescriptors,
+        traits: s.traits,
+      })),
+    });
     await db.execute(
       'UPDATE stories SET retry_state = ? WHERE id = ?',
       [JSON.stringify(retryState), storyId]
@@ -313,8 +325,8 @@ class DatabaseService {
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, status, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, status, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -322,6 +334,7 @@ class DatabaseService {
         character.description,
         character.relationship,
         JSON.stringify(character.traits),
+        JSON.stringify(character.visualDescriptors || []),
         character.status,
         character.metadata ? JSON.stringify(character.metadata) : null,
       ]
@@ -337,6 +350,7 @@ class DatabaseService {
     if (updates.description !== undefined) { setClauses.push('description = ?'); values.push(updates.description); }
     if (updates.relationship !== undefined) { setClauses.push('relationship = ?'); values.push(updates.relationship); }
     if (updates.traits !== undefined) { setClauses.push('traits = ?'); values.push(JSON.stringify(updates.traits)); }
+    if (updates.visualDescriptors !== undefined) { setClauses.push('visual_descriptors = ?'); values.push(JSON.stringify(updates.visualDescriptors)); }
     if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
 
@@ -721,11 +735,13 @@ class DatabaseService {
     locations: Location[],
     items: Item[],
     storyBeats: StoryBeat[],
-    lorebookEntries: Entry[]
+    lorebookEntries: Entry[],
+    embeddedImages: EmbeddedImage[] = []
   ): Promise<void> {
     const db = await this.getDb();
 
     // Delete current state (except chapters which are more permanent)
+    // Note: embedded_images will be cascade-deleted when story_entries are deleted
     await db.execute('DELETE FROM story_entries WHERE story_id = ?', [storyId]);
     await db.execute('DELETE FROM characters WHERE story_id = ?', [storyId]);
     await db.execute('DELETE FROM locations WHERE story_id = ?', [storyId]);
@@ -761,6 +777,24 @@ class DatabaseService {
     // Restore lorebook entries
     for (const entry of lorebookEntries) {
       await this.addEntry(entry);
+    }
+
+    // Restore embedded images
+    for (const image of embeddedImages) {
+      await this.createEmbeddedImage({
+        id: image.id,
+        storyId: image.storyId,
+        entryId: image.entryId,
+        sourceText: image.sourceText,
+        prompt: image.prompt,
+        styleId: image.styleId,
+        model: image.model,
+        imageData: image.imageData,
+        width: image.width,
+        height: image.height,
+        status: image.status,
+        errorMessage: image.errorMessage,
+      });
     }
   }
 
@@ -934,8 +968,112 @@ class DatabaseService {
     return results.map(this.mapEntry);
   }
 
+  // ===== Embedded Image Operations =====
+
+  async getEmbeddedImagesForEntry(entryId: string): Promise<EmbeddedImage[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM embedded_images WHERE entry_id = ? ORDER BY created_at ASC',
+      [entryId]
+    );
+    return results.map(this.mapEmbeddedImage);
+  }
+
+  async getEmbeddedImagesForStory(storyId: string): Promise<EmbeddedImage[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM embedded_images WHERE story_id = ? ORDER BY created_at ASC',
+      [storyId]
+    );
+    return results.map(this.mapEmbeddedImage);
+  }
+
+  async createEmbeddedImage(image: Omit<EmbeddedImage, 'createdAt'>): Promise<EmbeddedImage> {
+    const db = await this.getDb();
+    const now = Date.now();
+    await db.execute(
+      `INSERT INTO embedded_images (
+        id, story_id, entry_id, source_text, prompt, style_id, model,
+        image_data, width, height, status, error_message, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        image.id,
+        image.storyId,
+        image.entryId,
+        image.sourceText,
+        image.prompt,
+        image.styleId,
+        image.model,
+        image.imageData,
+        image.width ?? null,
+        image.height ?? null,
+        image.status,
+        image.errorMessage ?? null,
+        now,
+      ]
+    );
+    return { ...image, createdAt: now };
+  }
+
+  async updateEmbeddedImage(id: string, updates: Partial<EmbeddedImage>): Promise<void> {
+    const db = await this.getDb();
+    const setClauses: string[] = [];
+    const values: any[] = [];
+
+    if (updates.imageData !== undefined) { setClauses.push('image_data = ?'); values.push(updates.imageData); }
+    if (updates.width !== undefined) { setClauses.push('width = ?'); values.push(updates.width); }
+    if (updates.height !== undefined) { setClauses.push('height = ?'); values.push(updates.height); }
+    if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
+    if (updates.errorMessage !== undefined) { setClauses.push('error_message = ?'); values.push(updates.errorMessage); }
+
+    if (setClauses.length === 0) return;
+    values.push(id);
+    await db.execute(`UPDATE embedded_images SET ${setClauses.join(', ')} WHERE id = ?`, values);
+  }
+
+  async deleteEmbeddedImage(id: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM embedded_images WHERE id = ?', [id]);
+  }
+
+  async deleteEmbeddedImagesForEntry(entryId: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM embedded_images WHERE entry_id = ?', [entryId]);
+  }
+
+  private mapEmbeddedImage(row: any): EmbeddedImage {
+    return {
+      id: row.id,
+      storyId: row.story_id,
+      entryId: row.entry_id,
+      sourceText: row.source_text,
+      prompt: row.prompt,
+      styleId: row.style_id,
+      model: row.model,
+      imageData: row.image_data,
+      width: row.width ?? undefined,
+      height: row.height ?? undefined,
+      status: row.status as EmbeddedImageStatus,
+      errorMessage: row.error_message ?? undefined,
+      createdAt: row.created_at,
+    };
+  }
+
   // Mapping functions
   private mapStory(row: any): Story {
+    const retryState = row.retry_state ? JSON.parse(row.retry_state) : null;
+    if (retryState) {
+      console.log('[Database] Loading story with retry state', {
+        storyId: row.id,
+        hasCharacterSnapshots: !!retryState.characterSnapshots,
+        characterSnapshotsCount: retryState.characterSnapshots?.length ?? 0,
+        characterSnapshots: retryState.characterSnapshots?.map((s: any) => ({
+          id: s.id,
+          visualDescriptors: s.visualDescriptors,
+          traits: s.traits,
+        })),
+      });
+    }
     return {
       id: row.id,
       title: row.title,
@@ -947,7 +1085,7 @@ class DatabaseService {
       updatedAt: row.updated_at,
       settings: row.settings ? JSON.parse(row.settings) : null,
       memoryConfig: row.memory_config ? JSON.parse(row.memory_config) : null,
-      retryState: row.retry_state ? JSON.parse(row.retry_state) : null,
+      retryState,
       styleReviewState: row.style_review_state ? JSON.parse(row.style_review_state) : null,
       timeTracker: row.time_tracker ? JSON.parse(row.time_tracker) : null,
     };
@@ -974,6 +1112,7 @@ class DatabaseService {
       description: row.description,
       relationship: row.relationship,
       traits: row.traits ? JSON.parse(row.traits) : [],
+      visualDescriptors: row.visual_descriptors ? JSON.parse(row.visual_descriptors) : [],
       status: row.status,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
     };

@@ -411,6 +411,13 @@ export const CONTEXT_PLACEHOLDERS: ContextPlaceholder[] = [
   { id: 'title', name: 'Title', token: 'title', category: 'wizard', description: 'Story or scene title' },
   { id: 'atmosphere-section', name: 'Atmosphere Section', token: 'atmosphereSection', category: 'wizard', description: 'Atmosphere and mood description' },
   { id: 'supporting-characters-section', name: 'Supporting Characters', token: 'supportingCharactersSection', category: 'wizard', description: 'Information about supporting characters' },
+
+  // Image generation
+  { id: 'max-images', name: 'Max Images', token: 'maxImages', category: 'other', description: 'Maximum number of images to generate (0 = unlimited)' },
+  { id: 'image-style-prompt', name: 'Image Style Prompt', token: 'imageStylePrompt', category: 'other', description: 'Style guidelines for image generation (anime, photorealistic, etc.)' },
+  { id: 'character-descriptors', name: 'Character Descriptors', token: 'characterDescriptors', category: 'other', description: 'Visual appearance descriptors for characters in the scene' },
+  { id: 'chat-history', name: 'Chat History', token: 'chatHistory', category: 'story', description: 'Full untruncated chat history for comprehensive context' },
+  { id: 'lorebook-context', name: 'Lorebook Context', token: 'lorebookContext', category: 'story', description: 'Activated lorebook entries for world and character context' },
 ];
 
 /**
@@ -648,6 +655,27 @@ Note: The story may be in Adventure mode (player as protagonist) or Creative Wri
 - Example: "Elena, the blacksmith's daughter who offers a task" = YES
 - Example: "the innkeeper who served a drink" = NO
 
+### Visual Descriptors (CRITICAL for image generation)
+Visual descriptors enable consistent character visualization. The goal is to build a COMPLETE PICTURE of each character - someone reading just the descriptors should be able to clearly visualize and draw that character.
+
+**For NEW characters:** Extract a COMPREHENSIVE visual description from the text and full chat history:
+- Face: skin tone, facial features, expression, age indicators
+- Hair: color, length, style, texture (e.g., "wavy auburn hair to shoulders")
+- Eyes: color, shape, notable features (e.g., "sharp green eyes")
+- Build: height, body type, posture (e.g., "tall and lean", "broad-shouldered")
+- Clothing: full outfit description (e.g., "worn leather armor over gray tunic, brown traveling cloak")
+- Accessories: jewelry, weapons, bags, distinctive items (e.g., "silver pendant", "sword at hip")
+- Distinguishing marks: scars, tattoos, birthmarks (e.g., "scar across left cheek")
+
+**For EXISTING characters:**
+- Add new descriptors when ANY visual detail is revealed - even minor clothing or accessory mentions
+- Update clothing descriptors when outfits change
+- Remove descriptors that no longer apply (removed cloak, changed clothes, healed scar)
+- Review the full chat history to catch visual details that may have been mentioned earlier
+- Do NOT invent descriptors not mentioned anywhere in the story
+
+**Goal:** Each character's visual descriptors should be detailed enough that an artist could draw them accurately.
+
 ### Locations - ONLY extract if:
 - The scene takes place there or characters travel there
 - It has a specific name (not "a dark alley" or "the forest")
@@ -732,7 +760,7 @@ Items: {{existingItems}}
 
 ### Field Specifications
 
-characterUpdates: [{"name": "ExistingName", "changes": {"status": "active|inactive|deceased", "relationship": "new relationship", "newTraits": ["trait"], "removeTraits": ["trait"]}}]
+characterUpdates: [{"name": "ExistingName", "changes": {"status": "active|inactive|deceased", "relationship": "new relationship", "newTraits": ["trait"], "removeTraits": ["trait"], "addVisualDescriptors": ["silver hair"], "removeVisualDescriptors": ["old cloak"]}}]
 
 locationUpdates: [{"name": "ExistingName", "changes": {"visited": true, "current": true, "descriptionAddition": "new detail learned"}}]
 
@@ -740,7 +768,7 @@ itemUpdates: [{"name": "ExistingName", "changes": {"quantity": 1, "equipped": tr
 
 storyBeatUpdates: [{"title": "ExistingBeatTitle", "changes": {"status": "completed|failed", "description": "optional updated description"}}]
 
-newCharacters: [{"name": "ProperName", "description": "one sentence", "relationship": "friend|enemy|ally|neutral|unknown", "traits": ["trait1"]}]
+newCharacters: [{"name": "ProperName", "description": "one sentence", "relationship": "friend|enemy|ally|neutral|unknown", "traits": ["trait1"], "visualDescriptors": ["hair color", "clothing", "notable features"]}]
 
 newLocations: [{"name": "ProperName", "description": "one sentence", "visited": true, "current": false}]
 
@@ -1406,6 +1434,91 @@ Write an immersive opening that drops the reader into the story. Remember: the a
 };
 
 // ============================================================================
+// IMAGE STYLE TEMPLATES
+// ============================================================================
+
+const softAnimeStyleTemplate: PromptTemplate = {
+  id: 'image-style-soft-anime',
+  name: 'Soft Anime',
+  category: 'image-style',
+  description: 'Soft cel-shading, muted pastels, dreamy atmosphere',
+  content: `Soft cel-shaded anime illustration with muted pastel color palette. Low saturation, gentle lighting with diffused ambient glow. Subtle linework that blends into the coloring rather than hard outlines. Smooth gradients on shadows, slight bloom effect on highlights and light sources. Dreamy, airy, cozy atmosphere. Studio Ghibli-inspired aesthetic with soft watercolor texture hints in background. Smooth blending on hair and skin with no visible harsh texture. Avoid high contrast, sharp shadows, or dark gritty environments.`,
+};
+
+const semiRealisticAnimeStyleTemplate: PromptTemplate = {
+  id: 'image-style-semi-realistic',
+  name: 'Semi-realistic Anime',
+  category: 'image-style',
+  description: 'Polished, cinematic, detailed rendering',
+  content: `Semi-realistic anime style with refined, polished rendering. Realistic proportions and features with anime influence. Detailed rendering on hair showing individual strands, subtle skin tones with natural variation, fabric folds with weight and texture. Naturalistic lighting with clear direction and soft falloff. Cinematic composition with intentional depth of field when appropriate. Rich, slightly desaturated colors with professional color grading. Painterly quality with polished, refined edges. Grounded and atmospheric mood. Suitable for urban environments, dramatic lighting, professional attire, night scenes, weather effects, detailed interiors. Avoid overly cartoonish expressions, flat colors, or chibi proportions.`,
+};
+
+const photorealisticStyleTemplate: PromptTemplate = {
+  id: 'image-style-photorealistic',
+  name: 'Photorealistic',
+  category: 'image-style',
+  description: 'True-to-life rendering with natural lighting',
+  content: `Photorealistic digital art with true-to-life rendering. Natural lighting with accurate shadows and highlights. Detailed textures on skin, fabric, and materials. Accurate human proportions and anatomy. Professional photography aesthetic with cinematic depth of field. High dynamic range with realistic contrast. Detailed environments with accurate perspective. Materials rendered with proper reflectance and subsurface scattering where appropriate. Film grain optional for cinematic feel. 8K quality, hyperrealistic detail.`,
+};
+
+// Image prompt analysis service template
+const imagePromptAnalysisTemplate: PromptTemplate = {
+  id: 'image-prompt-analysis',
+  name: 'Image Prompt Analysis',
+  category: 'service',
+  description: 'Identifies imageable scenes in narrative text for image generation',
+  content: `You identify visually striking moments in narrative text for image generation.
+
+## Your Task
+Analyze the provided narrative and identify key visual moments that would make compelling images. For each moment, create a detailed image generation prompt and note the exact source text.
+
+**Maximum Images: {{maxImages}}** (0 means unlimited - use your judgment)
+
+## Style Guidelines
+{{imageStylePrompt}}
+
+## Character Visual Reference
+When depicting named characters, incorporate their established visual descriptors:
+{{characterDescriptors}}
+
+## Output Format
+Return a JSON array (no markdown, just raw JSON):
+[
+  {
+    "prompt": "Detailed image generation prompt incorporating the style guidelines and character descriptors...",
+    "sourceText": "exact phrase from narrative (3-15 words, verbatim quote that will be matched case-insensitively)",
+    "sceneType": "action|item|character|environment",
+    "priority": 1-10
+  }
+]
+
+## Priority Guidelines
+- 8-10: Dramatic actions, combat, pivotal character moments
+- 6-8: Significant items, magical effects, important reveals
+- 5-7: Character introductions, emotional expressions
+- 3-5: Environmental establishing shots, atmosphere
+
+## Rules
+1. sourceText MUST be a verbatim quote from the narrative (3-15 words)
+2. Include character visual descriptors when depicting named characters
+3. Return empty array [] if no suitable visual moments exist
+4. Skip: mundane actions, dialogue-only scenes, abstract concepts
+5. Respect the maximum images limit (unless 0/unlimited)`,
+  userContent: `## Story Context
+{{chatHistory}}
+
+{{lorebookContext}}
+
+## User Action
+{{userAction}}
+
+## Narrative to Analyze
+{{narrativeResponse}}
+
+Identify the most visually striking moments and return the JSON array.`,
+};
+
+// ============================================================================
 // COMBINED PROMPT TEMPLATES
 // ============================================================================
 
@@ -1425,6 +1538,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   lorebookClassifierPromptTemplate,
   loreManagementPromptTemplate,
   agenticRetrievalPromptTemplate,
+  imagePromptAnalysisTemplate,
   // Wizard prompts
   settingExpansionPromptTemplate,
   protagonistGenerationPromptTemplate,
@@ -1432,6 +1546,10 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   supportingCharactersPromptTemplate,
   openingGenerationAdventurePromptTemplate,
   openingGenerationCreativePromptTemplate,
+  // Image style prompts
+  softAnimeStyleTemplate,
+  semiRealisticAnimeStyleTemplate,
+  photorealisticStyleTemplate,
 ];
 
 // ============================================================================
@@ -1462,8 +1580,15 @@ export function getMacrosByType(type: 'simple' | 'complex'): Macro[] {
 /**
  * Get all templates of a specific category
  */
-export function getTemplatesByCategory(category: 'story' | 'service' | 'wizard'): PromptTemplate[] {
+export function getTemplatesByCategory(category: 'story' | 'service' | 'wizard' | 'image-style'): PromptTemplate[] {
   return PROMPT_TEMPLATES.filter(t => t.category === category);
+}
+
+/**
+ * Get all image style templates
+ */
+export function getImageStyleTemplates(): PromptTemplate[] {
+  return PROMPT_TEMPLATES.filter(t => t.category === 'image-style');
 }
 
 /**

@@ -1,9 +1,12 @@
 <script lang="ts">
-  import type { StoryEntry } from '$lib/types';
+  import type { StoryEntry, EmbeddedImage } from '$lib/types';
   import { story } from '$lib/stores/story.svelte';
   import { ui } from '$lib/stores/ui.svelte';
-  import { User, BookOpen, Info, Pencil, Trash2, Check, X, RefreshCw, RotateCcw } from 'lucide-svelte';
+  import { User, BookOpen, Info, Pencil, Trash2, Check, X, RefreshCw, RotateCcw, ImageIcon, Loader2, AlertCircle } from 'lucide-svelte';
   import { parseMarkdown } from '$lib/utils/markdown';
+  import { database } from '$lib/services/database';
+  import { eventBus, type ImageReadyEvent } from '$lib/services/events';
+  import { onMount } from 'svelte';
 
   let { entry }: { entry: StoryEntry } = $props();
 
@@ -95,6 +98,176 @@
   let isEditing = $state(false);
   let editContent = $state('');
   let isDeleting = $state(false);
+
+  // Embedded images state
+  let embeddedImages = $state<EmbeddedImage[]>([]);
+  let expandedImageId = $state<string | null>(null);
+  let clickedElement = $state<HTMLElement | null>(null);
+
+  // Load embedded images for narration entries
+  async function loadEmbeddedImages() {
+    if (entry.type !== 'narration') return;
+    try {
+      embeddedImages = await database.getEmbeddedImagesForEntry(entry.id);
+    } catch (err) {
+      console.error('[StoryEntry] Failed to load embedded images:', err);
+    }
+  }
+
+  // Escape special regex characters
+  function escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Process content to wrap source text matches in clickable spans
+  function processContentWithImages(content: string, images: EmbeddedImage[]): string {
+    if (images.length === 0) return parseMarkdown(content);
+
+    let processed = content;
+
+    // Sort images by source text length (longest first) to avoid partial matches
+    const sortedImages = [...images]
+      .filter(img => img.status === 'complete' || img.status === 'generating' || img.status === 'pending')
+      .sort((a, b) => b.sourceText.length - a.sourceText.length);
+
+    // Track which portions of text have been marked
+    const markers: { start: number; end: number; imageId: string; status: string }[] = [];
+
+    for (const img of sortedImages) {
+      // Case-insensitive search for the source text
+      const regex = new RegExp(escapeRegex(img.sourceText), 'gi');
+      let match;
+      while ((match = regex.exec(processed)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+
+        // Check if this overlaps with an existing marker
+        const overlaps = markers.some(m =>
+          (start >= m.start && start < m.end) ||
+          (end > m.start && end <= m.end) ||
+          (start <= m.start && end >= m.end)
+        );
+
+        if (!overlaps) {
+          markers.push({ start, end, imageId: img.id, status: img.status });
+        }
+      }
+    }
+
+    // Sort markers by position (reverse order for replacement)
+    markers.sort((a, b) => b.start - a.start);
+
+    // Apply markers from end to start to preserve positions
+    for (const marker of markers) {
+      const originalText = processed.slice(marker.start, marker.end);
+      const statusClass = marker.status === 'complete' ? 'complete' :
+                          marker.status === 'generating' ? 'generating' : 'pending';
+      const replacement = `<span class="embedded-image-link ${statusClass}" data-image-id="${marker.imageId}">${originalText}</span>`;
+      processed = processed.slice(0, marker.start) + replacement + processed.slice(marker.end);
+    }
+
+    return parseMarkdown(processed);
+  }
+
+  // Handle click on embedded image link
+  function handleContentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    const imageLink = target.closest('.embedded-image-link') as HTMLElement | null;
+    if (imageLink) {
+      const imageId = imageLink.getAttribute('data-image-id');
+      if (imageId) {
+        // Toggle expanded state
+        if (expandedImageId === imageId) {
+          expandedImageId = null;
+          clickedElement = null;
+        } else {
+          expandedImageId = imageId;
+          clickedElement = imageLink;
+        }
+      }
+    }
+  }
+
+  // Manage inline image display
+  $effect(() => {
+    // Clean up any existing inline image displays
+    const existingDisplays = document.querySelectorAll('.inline-image-display');
+    existingDisplays.forEach(el => el.remove());
+
+    if (!expandedImageId || !clickedElement || !expandedImage) return;
+
+    // Create the inline image container
+    const container = document.createElement('div');
+    container.className = 'inline-image-display';
+    container.setAttribute('data-image-id', expandedImageId);
+
+    // Build the HTML content based on image status
+    let innerHtml = `
+      <div class="inline-image-header">
+        <div class="inline-image-title">
+          <span class="inline-image-source">${expandedImage.sourceText}</span>
+        </div>
+        <button class="inline-image-close" aria-label="Close image">×</button>
+      </div>
+    `;
+
+    if (expandedImage.status === 'complete' && expandedImage.imageData) {
+      innerHtml += `<img src="data:image/png;base64,${expandedImage.imageData}" alt="${expandedImage.sourceText}" class="inline-image-content" />`;
+    } else if (expandedImage.status === 'generating') {
+      innerHtml += `<div class="inline-image-loading"><span class="spinner"></span><span>Generating image...</span></div>`;
+    } else if (expandedImage.status === 'pending') {
+      innerHtml += `<div class="inline-image-loading"><span>Image queued...</span></div>`;
+    } else if (expandedImage.status === 'failed') {
+      innerHtml += `<div class="inline-image-error"><span>Failed to generate image</span>${expandedImage.errorMessage ? `<span class="error-message">${expandedImage.errorMessage}</span>` : ''}</div>`;
+    }
+
+    container.innerHTML = innerHtml;
+
+    // Add close button handler
+    const closeBtn = container.querySelector('.inline-image-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        expandedImageId = null;
+        clickedElement = null;
+      });
+    }
+
+    // Insert after the clicked element's parent paragraph or directly after
+    const paragraph = clickedElement.closest('p');
+    if (paragraph) {
+      paragraph.insertAdjacentElement('afterend', container);
+    } else {
+      clickedElement.insertAdjacentElement('afterend', container);
+    }
+
+    // Cleanup function
+    return () => {
+      container.remove();
+    };
+  });
+
+  // Get the currently expanded image
+  const expandedImage = $derived(
+    expandedImageId ? embeddedImages.find(img => img.id === expandedImageId) : null
+  );
+
+  // Load images when entry changes
+  $effect(() => {
+    if (entry.type === 'narration') {
+      loadEmbeddedImages();
+    }
+  });
+
+  // Subscribe to ImageReady events
+  onMount(() => {
+    const unsubscribe = eventBus.subscribe<ImageReadyEvent>('ImageReady', (event) => {
+      if (event.entryId === entry.id) {
+        // Reload images when one completes for this entry
+        loadEmbeddedImages();
+      }
+    });
+    return unsubscribe;
+  });
 
   const icons = {
     user_action: User,
@@ -250,8 +423,9 @@
           </div>
         </div>
       {:else}
-        <div class="story-text prose-content">
-          {@html parseMarkdown(entry.content)}
+        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+        <div class="story-text prose-content" onclick={handleContentClick}>
+          {@html entry.type === 'narration' ? processContentWithImages(entry.content, embeddedImages) : parseMarkdown(entry.content)}
         </div>
         {#if isErrorEntry}
           <button
@@ -282,3 +456,131 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Embedded image link styles */
+  :global(.embedded-image-link) {
+    color: var(--accent-400);
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+    transition: all 0.15s ease;
+  }
+
+  :global(.embedded-image-link:hover) {
+    text-decoration-style: solid;
+    filter: brightness(1.1);
+  }
+
+  :global(.embedded-image-link.generating) {
+    color: var(--color-amber-400, #fbbf24);
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  :global(.embedded-image-link.pending) {
+    color: var(--surface-400);
+    text-decoration-style: dashed;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  /* Inline image display styles */
+  :global(.inline-image-display) {
+    margin: 0.75rem 0;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    border: 1px solid var(--surface-600);
+    background-color: var(--surface-800);
+  }
+
+  :global(.inline-image-header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--surface-700);
+  }
+
+  :global(.inline-image-title) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--surface-300);
+  }
+
+  :global(.inline-image-source) {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.inline-image-close) {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    background: transparent;
+    border: none;
+    color: var(--surface-400);
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  :global(.inline-image-close:hover) {
+    background-color: var(--surface-600);
+    color: var(--surface-200);
+  }
+
+  :global(.inline-image-content) {
+    display: block;
+    width: 100%;
+    max-width: 28rem;
+    margin: 0 auto;
+  }
+
+  :global(.inline-image-loading) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: var(--surface-400);
+    font-size: 0.875rem;
+  }
+
+  :global(.inline-image-loading .spinner) {
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 2px solid var(--surface-600);
+    border-top-color: var(--accent-400);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  :global(.inline-image-error) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: var(--color-red-400, #f87171);
+    font-size: 0.875rem;
+  }
+
+  :global(.inline-image-error .error-message) {
+    font-size: 0.75rem;
+    color: var(--surface-500);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>

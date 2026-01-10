@@ -125,6 +125,19 @@ export interface SaveCompleteEvent {
   storyId: string;
 }
 
+export interface ImageQueuedEvent {
+  type: 'ImageQueued';
+  imageId: string;
+  entryId: string;
+}
+
+export interface ImageReadyEvent {
+  type: 'ImageReady';
+  imageId: string;
+  entryId: string;
+  success: boolean;
+}
+
 export interface GenericEvent {
   type: EventType;
   payload?: any;
@@ -147,6 +160,8 @@ export type AventuraEvent =
   | StoryCreatedEvent
   | ModeChangedEvent
   | SaveCompleteEvent
+  | ImageQueuedEvent
+  | ImageReadyEvent
   | GenericEvent;
 
 // Handler function type
@@ -289,4 +304,12 @@ export function emitStoryLoaded(storyId: string, mode: 'adventure' | 'creative-w
 
 export function emitModeChanged(mode: 'adventure' | 'creative-writing'): void {
   eventBus.emit<ModeChangedEvent>({ type: 'ModeChanged', mode });
+}
+
+export function emitImageQueued(imageId: string, entryId: string): void {
+  eventBus.emit<ImageQueuedEvent>({ type: 'ImageQueued', imageId, entryId });
+}
+
+export function emitImageReady(imageId: string, entryId: string, success: boolean): void {
+  eventBus.emit<ImageReadyEvent>({ type: 'ImageReady', imageId, entryId, success });
 }

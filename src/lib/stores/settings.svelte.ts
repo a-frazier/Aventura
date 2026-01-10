@@ -391,7 +391,7 @@ export function getDefaultClassifierSettings(): ClassifierSettings {
     reasoningEffort: 'medium',
     providerOnly: [],
     manualBody: '',
-    chatHistoryTruncation: 300,  // Default: truncate to 300 words per entry
+    chatHistoryTruncation: 0,  // No truncation - full chat history for comprehensive visual descriptors
   };
 }
 
@@ -408,7 +408,7 @@ export function getDefaultClassifierSettingsForProvider(provider: ProviderPreset
     reasoningEffort: 'medium',
     providerOnly: [],
     manualBody: '',
-    chatHistoryTruncation: 300,  // Default: truncate to 300 words per entry
+    chatHistoryTruncation: 0,  // No truncation - full chat history for comprehensive visual descriptors
   };
 }
 
@@ -852,6 +852,65 @@ export function getDefaultUpdateSettings(): UpdateSettings {
   };
 }
 
+// Image Generation settings (automatic image generation for narrative)
+export interface ImageGenerationServiceSettings {
+  enabled: boolean;               // Toggle for image generation (default: false)
+  nanoGptApiKey: string;          // NanoGPT API key for image generation
+  model: string;                  // Image model (default: 'z-image-turbo')
+  styleId: string;                // Selected image style template
+  size: '512x512' | '1024x1024';  // Image size
+  maxImagesPerMessage: number;    // Max images per narrative (0 = unlimited, default: 3)
+  autoGenerate: boolean;          // Generate automatically after narration
+
+  // Scene analysis model settings (for identifying imageable scenes)
+  promptProfileId: string | null; // API profile for scene analysis
+  promptModel: string;            // Model for scene analysis (empty = use profile default)
+  promptTemperature: number;
+  promptMaxTokens: number;
+  reasoningEffort: ReasoningEffort;
+  providerOnly: string[];
+  manualBody: string;
+}
+
+export function getDefaultImageGenerationSettings(): ImageGenerationServiceSettings {
+  return {
+    enabled: false,
+    nanoGptApiKey: '',
+    model: 'z-image-turbo',
+    styleId: 'image-style-soft-anime',
+    size: '1024x1024',
+    maxImagesPerMessage: 3,
+    autoGenerate: true,
+    promptProfileId: DEFAULT_OPENROUTER_PROFILE_ID,
+    promptModel: 'deepseek/deepseek-v3.2',
+    promptTemperature: 0.3,
+    promptMaxTokens: 2048,
+    reasoningEffort: 'off',
+    providerOnly: [],
+    manualBody: '',
+  };
+}
+
+export function getDefaultImageGenerationSettingsForProvider(provider: ProviderPreset): ImageGenerationServiceSettings {
+  const promptProfileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
+  return {
+    enabled: false,
+    nanoGptApiKey: '',  // Will be autofilled from NanoGPT profile if available
+    model: 'z-image-turbo',
+    styleId: 'image-style-soft-anime',
+    size: '1024x1024',
+    maxImagesPerMessage: 3,
+    autoGenerate: true,
+    promptProfileId,
+    promptModel: 'deepseek/deepseek-v3.2',
+    promptTemperature: 0.3,
+    promptMaxTokens: 2048,
+    reasoningEffort: 'off',
+    providerOnly: [],
+    manualBody: '',
+  };
+}
+
 // Combined system services settings
 export interface SystemServicesSettings {
   classifier: ClassifierSettings;
@@ -864,6 +923,7 @@ export interface SystemServicesSettings {
   agenticRetrieval: AgenticRetrievalSettings;
   timelineFill: TimelineFillSettings;
   entryRetrieval: EntryRetrievalSettings;
+  imageGeneration: ImageGenerationServiceSettings;
 }
 
 export function getDefaultSystemServicesSettings(): SystemServicesSettings {
@@ -878,6 +938,7 @@ export function getDefaultSystemServicesSettings(): SystemServicesSettings {
     agenticRetrieval: getDefaultAgenticRetrievalSettings(),
     timelineFill: getDefaultTimelineFillSettings(),
     entryRetrieval: getDefaultEntryRetrievalSettings(),
+    imageGeneration: getDefaultImageGenerationSettings(),
   };
 }
 
@@ -893,6 +954,7 @@ export function getDefaultSystemServicesSettingsForProvider(provider: ProviderPr
     agenticRetrieval: getDefaultAgenticRetrievalSettingsForProvider(provider),
     timelineFill: getDefaultTimelineFillSettingsForProvider(provider),
     entryRetrieval: getDefaultEntryRetrievalSettingsForProvider(provider),
+    imageGeneration: getDefaultImageGenerationSettingsForProvider(provider),
   };
 }
 
@@ -1148,6 +1210,7 @@ class SettingsStore {
             agenticRetrieval: { ...defaults.agenticRetrieval, ...loaded.agenticRetrieval },
             timelineFill: { ...defaults.timelineFill, ...loaded.timelineFill },
             entryRetrieval: { ...defaults.entryRetrieval, ...loaded.entryRetrieval },
+            imageGeneration: { ...defaults.imageGeneration, ...loaded.imageGeneration },
           };
 
           const isMissingProfileId = (profileId: string | null | undefined): boolean => {
@@ -1918,6 +1981,11 @@ class SettingsStore {
 
   async resetEntryRetrievalSettings() {
     this.systemServicesSettings.entryRetrieval = getDefaultEntryRetrievalSettingsForProvider(this.getEffectiveProvider());
+    await this.saveSystemServicesSettings();
+  }
+
+  async resetImageGenerationSettings() {
+    this.systemServicesSettings.imageGeneration = getDefaultImageGenerationSettingsForProvider(this.getEffectiveProvider());
     await this.saveSystemServicesSettings();
   }
 

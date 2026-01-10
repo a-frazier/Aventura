@@ -3,6 +3,7 @@
   import { story } from '$lib/stores/story.svelte';
   import { settings } from '$lib/stores/settings.svelte';
   import { exportService } from '$lib/services/export';
+  import { database } from '$lib/services/database';
   import { PanelLeft, Settings, BookOpen, Library, Feather, Download, FileJson, FileText, ChevronDown, Bug, BookMarked, Brain } from 'lucide-svelte';
 
   let showExportMenu = $state(false);
@@ -10,6 +11,8 @@
   async function exportAventura() {
     if (!story.currentStory) return;
     showExportMenu = false;
+    // Fetch embedded images for export
+    const embeddedImages = await database.getEmbeddedImagesForStory(story.currentStory.id);
     await exportService.exportToAventura(
       story.currentStory,
       story.entries,
@@ -17,7 +20,8 @@
       story.locations,
       story.items,
       story.storyBeats,
-      story.lorebookEntries
+      story.lorebookEntries,
+      embeddedImages
     );
   }
 

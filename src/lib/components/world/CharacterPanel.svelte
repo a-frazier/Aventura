@@ -13,6 +13,7 @@
   let editRelationship = $state('');
   let editStatus = $state<Character['status']>('active');
   let editTraits = $state('');
+  let editVisualDescriptors = $state('');
   let confirmingDeleteId = $state<string | null>(null);
   let pendingProtagonistId = $state<string | null>(null);
   let previousRelationshipLabel = $state('');
@@ -37,6 +38,7 @@
     editRelationship = character.relationship ?? '';
     editStatus = character.status;
     editTraits = character.traits.join(', ');
+    editVisualDescriptors = (character.visualDescriptors ?? []).join(', ');
   }
 
   function cancelEdit() {
@@ -45,6 +47,7 @@
     editDescription = '';
     editRelationship = '';
     editTraits = '';
+    editVisualDescriptors = '';
     editStatus = 'active';
   }
 
@@ -57,6 +60,10 @@
       .split(',')
       .map(trait => trait.trim())
       .filter(Boolean);
+    const visualDescriptors = editVisualDescriptors
+      .split(',')
+      .map(desc => desc.trim())
+      .filter(Boolean);
 
     await story.updateCharacter(character.id, {
       name,
@@ -64,6 +71,7 @@
       relationship: character.relationship === 'self' ? 'self' : (relationship || null),
       status: editStatus,
       traits,
+      visualDescriptors,
     });
 
     cancelEdit();
@@ -196,6 +204,11 @@
                     Traits: {character.traits.join(', ')}
                   </p>
                 {/if}
+                {#if character.visualDescriptors && character.visualDescriptors.length > 0}
+                  <p class="mt-1 break-words text-xs text-pink-400/80">
+                    Appearance: {character.visualDescriptors.join(', ')}
+                  </p>
+                {/if}
                 {#if character.description}
                   <p class="mt-1 break-words text-sm text-surface-400">{character.description}</p>
                 {/if}
@@ -297,6 +310,12 @@
                 type="text"
                 bind:value={editTraits}
                 placeholder="Traits (comma separated)"
+                class="input text-sm"
+              />
+              <input
+                type="text"
+                bind:value={editVisualDescriptors}
+                placeholder="Appearance (comma separated, for images)"
                 class="input text-sm"
               />
               <textarea

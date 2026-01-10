@@ -1,4 +1,4 @@
-import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, Checkpoint, MemoryConfig, StoryMode, StorySettings, Entry, TimeTracker } from '$lib/types';
+import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, Checkpoint, MemoryConfig, StoryMode, StorySettings, Entry, TimeTracker, EmbeddedImage, PersistentCharacterSnapshot } from '$lib/types';
 import { database } from '$lib/services/database';
 import { BUILTIN_TEMPLATES } from '$lib/services/templates';
 import { ui } from './ui.svelte';
@@ -416,6 +416,7 @@ class StoryStore {
           traits: state.protagonist.traits ?? [],
           status: 'active',
           metadata: null,
+          visualDescriptors: [],
         };
         await database.addCharacter(protagonist);
       }
@@ -625,6 +626,7 @@ class StoryStore {
     itemIds: string[];
     storyBeatIds: string[];
     lorebookEntryIds: string[];
+    embeddedImageIds?: string[];
   }): Promise<void> {
     if (!this.currentStory) throw new Error('No story loaded');
 
@@ -633,6 +635,7 @@ class StoryStore {
     const itemIdsSet = new Set(savedIds.itemIds);
     const storyBeatIdsSet = new Set(savedIds.storyBeatIds);
     const lorebookEntryIdsSet = new Set(savedIds.lorebookEntryIds);
+    const embeddedImageIdsSet = new Set(savedIds.embeddedImageIds ?? []);
 
     // Find entities to delete (not in saved lists)
     const charactersToDelete = this.characters.filter(c => !characterIdsSet.has(c.id));
@@ -641,12 +644,20 @@ class StoryStore {
     const storyBeatsToDelete = this.storyBeats.filter(sb => !storyBeatIdsSet.has(sb.id));
     const lorebookEntriesToDelete = this.lorebookEntries.filter(le => !lorebookEntryIdsSet.has(le.id));
 
+    // Embedded images are not in memory - fetch from database to find ones to delete
+    // Note: Many embedded images may already be deleted via CASCADE when entries are deleted
+    const currentEmbeddedImages = await database.getEmbeddedImagesForStory(this.currentStory.id);
+    const embeddedImagesToDelete = savedIds.embeddedImageIds
+      ? currentEmbeddedImages.filter(ei => !embeddedImageIdsSet.has(ei.id))
+      : [];
+
     log('Deleting entities created after backup', {
       characters: charactersToDelete.length,
       locations: locationsToDelete.length,
       items: itemsToDelete.length,
       storyBeats: storyBeatsToDelete.length,
       lorebookEntries: lorebookEntriesToDelete.length,
+      embeddedImages: embeddedImagesToDelete.length,
     });
 
     // Delete from database
@@ -664,6 +675,9 @@ class StoryStore {
     }
     for (const lorebookEntry of lorebookEntriesToDelete) {
       await database.deleteEntry(lorebookEntry.id);
+    }
+    for (const embeddedImage of embeddedImagesToDelete) {
+      await database.deleteEmbeddedImage(embeddedImage.id);
     }
 
     // Update in-memory state
@@ -690,6 +704,7 @@ class StoryStore {
       traits: [],
       status: 'active',
       metadata: null,
+      visualDescriptors: [],
     };
 
     await database.addCharacter(character);
@@ -1071,7 +1086,13 @@ class StoryStore {
         log('Updating character:', update.name, update.changes);
         const changes: Partial<Character> = {};
         if (update.changes.status) changes.status = update.changes.status;
-        if (update.changes.relationship) changes.relationship = update.changes.relationship;
+        if (update.changes.relationship) {
+          if (existing.relationship === 'self') {
+            // Preserve protagonist relationship; only set via explicit swap.
+          } else if (update.changes.relationship !== 'self') {
+            changes.relationship = update.changes.relationship;
+          }
+        }
         if (update.changes.newTraits?.length || update.changes.removeTraits?.length) {
           let traits = [...existing.traits];
           if (update.changes.removeTraits?.length) {
@@ -1082,6 +1103,24 @@ class StoryStore {
             traits = [...traits, ...update.changes.newTraits];
           }
           changes.traits = traits;
+        }
+        // Handle visual descriptor updates for image generation
+        if (update.changes.addVisualDescriptors?.length || update.changes.removeVisualDescriptors?.length) {
+          let visualDescriptors = [...(existing.visualDescriptors || [])];
+          if (update.changes.removeVisualDescriptors?.length) {
+            const toRemove = new Set(update.changes.removeVisualDescriptors.map(d => d.toLowerCase()));
+            visualDescriptors = visualDescriptors.filter(d => !toRemove.has(d.toLowerCase()));
+          }
+          if (update.changes.addVisualDescriptors?.length) {
+            // Add only descriptors that don't already exist (case-insensitive)
+            const existingLower = new Set(visualDescriptors.map(d => d.toLowerCase()));
+            for (const desc of update.changes.addVisualDescriptors) {
+              if (!existingLower.has(desc.toLowerCase())) {
+                visualDescriptors.push(desc);
+              }
+            }
+          }
+          changes.visualDescriptors = visualDescriptors;
         }
         await database.updateCharacter(existing.id, changes);
         this.characters = this.characters.map(c =>
@@ -1187,6 +1226,7 @@ class StoryStore {
           description: newChar.description,
           relationship: newChar.relationship,
           traits: newChar.traits,
+          visualDescriptors: newChar.visualDescriptors || [],
           status: 'active',
           metadata: { source: 'classifier' },
         };
@@ -1690,13 +1730,29 @@ class StoryStore {
     items: Item[];
     storyBeats: StoryBeat[];
     lorebookEntries: Entry[];
+    embeddedImages: EmbeddedImage[];
     timeTracker?: TimeTracker | null;
   }): Promise<void> {
     if (!this.currentStory) throw new Error('No story loaded');
 
+    // Debug: Log character visual descriptors before restore
+    const currentCharDescriptors = this.characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    const backupCharDescriptors = backup.characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    log('RESTORE DEBUG - Before restore:', {
+      currentCharDescriptors,
+      backupCharDescriptors,
+    });
+
     log('Restoring from retry backup...', {
       entriesCount: backup.entries.length,
       currentEntriesCount: this.entries.length,
+      embeddedImagesCount: backup.embeddedImages.length,
     });
 
     // Restore to database
@@ -1707,16 +1763,45 @@ class StoryStore {
       backup.locations,
       backup.items,
       backup.storyBeats,
-      backup.lorebookEntries
+      backup.lorebookEntries,
+      backup.embeddedImages
     );
 
+    // Reload from database to ensure a clean, fully restored state
+    const [entries, characters, locations, items, storyBeats, lorebookEntries] = await Promise.all([
+      database.getStoryEntries(this.currentStory.id),
+      database.getCharacters(this.currentStory.id),
+      database.getLocations(this.currentStory.id),
+      database.getItems(this.currentStory.id),
+      database.getStoryBeats(this.currentStory.id),
+      database.getEntries(this.currentStory.id),
+    ]);
+
+    // Debug: Log what we got back from database
+    const dbCharDescriptors = characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    log('RESTORE DEBUG - After DB reload:', {
+      dbCharDescriptors,
+    });
+
     // Update local state
-    this.entries = [...backup.entries];
-    this.characters = [...backup.characters];
-    this.locations = [...backup.locations];
-    this.items = [...backup.items];
-    this.storyBeats = [...backup.storyBeats];
-    this.lorebookEntries = [...backup.lorebookEntries];
+    this.entries = entries;
+    this.characters = characters;
+    this.locations = locations;
+    this.items = items;
+    this.storyBeats = storyBeats;
+    this.lorebookEntries = lorebookEntries;
+
+    // Debug: Verify memory state matches
+    const finalCharDescriptors = this.characters.map(c => ({
+      name: c.name,
+      visualDescriptors: [...c.visualDescriptors],
+    }));
+    log('RESTORE DEBUG - Final state:', {
+      finalCharDescriptors,
+    });
 
     // Restore time tracker if provided (null clears)
     await this.restoreTimeTrackerSnapshot(backup.timeTracker);
@@ -1725,6 +1810,75 @@ class StoryStore {
       entries: this.entries.length,
       characters: this.characters.length,
       locations: this.locations.length,
+      embeddedImages: backup.embeddedImages.length,
+    });
+  }
+
+  /**
+   * Restore character state fields from persistent retry snapshots.
+   * Used for retry restores that don't have full state snapshots.
+   */
+  async restoreCharacterSnapshots(snapshots?: PersistentCharacterSnapshot[]): Promise<void> {
+    log('restoreCharacterSnapshots called', {
+      hasCurrentStory: !!this.currentStory,
+      snapshotsCount: snapshots?.length ?? 0,
+      snapshots: snapshots?.map(s => ({ id: s.id, visualDescriptors: s.visualDescriptors })),
+      currentCharacters: this.characters.map(c => ({ id: c.id, name: c.name, visualDescriptors: c.visualDescriptors })),
+    });
+
+    if (!this.currentStory || !snapshots || snapshots.length === 0) {
+      log('restoreCharacterSnapshots: early return - no story or no snapshots');
+      return;
+    }
+
+    const snapshotById = new Map(snapshots.map(snapshot => [snapshot.id, snapshot]));
+    const updates: Array<{ id: string; updates: Partial<Character> }> = [];
+
+    for (const character of this.characters) {
+      const snapshot = snapshotById.get(character.id);
+      if (!snapshot) continue;
+
+      let relationship = snapshot.relationship ?? character.relationship;
+      if (character.relationship === 'self' && relationship !== 'self') {
+        relationship = 'self';
+      }
+
+      updates.push({
+        id: character.id,
+        updates: {
+          traits: snapshot.traits ?? [],
+          status: snapshot.status ?? character.status,
+          relationship,
+          visualDescriptors: snapshot.visualDescriptors ?? [],
+        },
+      });
+    }
+
+    for (const update of updates) {
+      await database.updateCharacter(update.id, update.updates);
+    }
+
+    this.characters = this.characters.map(character => {
+      const snapshot = snapshotById.get(character.id);
+      if (!snapshot) return character;
+
+      let relationship = snapshot.relationship ?? character.relationship;
+      if (character.relationship === 'self' && relationship !== 'self') {
+        relationship = 'self';
+      }
+
+      return {
+        ...character,
+        traits: snapshot.traits ?? character.traits,
+        status: snapshot.status ?? character.status,
+        relationship,
+        visualDescriptors: snapshot.visualDescriptors ?? character.visualDescriptors,
+      };
+    });
+
+    log('restoreCharacterSnapshots complete', {
+      updatedCount: updates.length,
+      finalCharacters: this.characters.map(c => ({ id: c.id, name: c.name, visualDescriptors: c.visualDescriptors })),
     });
   }
 
@@ -1796,6 +1950,7 @@ class StoryStore {
         traits: data.protagonist.traits ?? [],
         status: 'active',
         metadata: { source: 'wizard' },
+        visualDescriptors: [],
       };
       await database.addCharacter(protagonist);
       log('Added protagonist:', protagonist.name);
@@ -1845,6 +2000,7 @@ class StoryStore {
         traits: charData.traits ?? [],
         status: 'active',
         metadata: { source: 'wizard' },
+        visualDescriptors: [],
       };
       await database.addCharacter(character);
       log('Added supporting character:', character.name);

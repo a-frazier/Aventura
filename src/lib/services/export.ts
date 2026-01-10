@@ -1,7 +1,7 @@
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, readTextFile } from '@tauri-apps/plugin-fs';
 import { database } from './database';
-import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Entry, PersistentStyleReviewState } from '$lib/types';
+import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Entry, PersistentStyleReviewState, EmbeddedImage } from '$lib/types';
 
 export interface AventuraExport {
   version: string;
@@ -15,6 +15,7 @@ export interface AventuraExport {
   lorebookEntries?: Entry[]; // Added in v1.1.0
   styleReviewState?: PersistentStyleReviewState | null; // Added in v1.2.0
   // Note: story.timeTracker added in v1.3.0
+  embeddedImages?: EmbeddedImage[]; // Added in v1.4.0
 }
 
 // Version history for import compatibility
@@ -22,9 +23,10 @@ export interface AventuraExport {
 // v1.1.0 - Added lorebookEntries
 // v1.2.0 - Added styleReviewState
 // v1.3.0 - Added timeTracker to story, entry metadata (timeStart/timeEnd)
+// v1.4.0 - Added embeddedImages (generated images embedded in story entries)
 
 class ExportService {
-  private readonly VERSION = '1.3.0';
+  private readonly VERSION = '1.4.0';
 
   /**
    * Compare semantic versions. Returns:
@@ -56,6 +58,9 @@ class ExportService {
     if (this.compareVersions(importVersion, '1.3.0') < 0) {
       console.warn(`[Import] File from v${importVersion} predates time tracking (v1.3.0). Time tracker will start at zero.`);
     }
+    if (this.compareVersions(importVersion, '1.4.0') < 0) {
+      console.warn(`[Import] File from v${importVersion} predates embedded images (v1.4.0). Generated images will not be restored.`);
+    }
   }
 
   // Export to Aventura format (.avt - JSON)
@@ -66,7 +71,8 @@ class ExportService {
     locations: Location[],
     items: Item[],
     storyBeats: StoryBeat[],
-    lorebookEntries: Entry[] = []
+    lorebookEntries: Entry[] = [],
+    embeddedImages: EmbeddedImage[] = []
   ): Promise<boolean> {
     const exportData: AventuraExport = {
       version: this.VERSION,
@@ -79,6 +85,7 @@ class ExportService {
       storyBeats,
       lorebookEntries,
       styleReviewState: story.styleReviewState,
+      embeddedImages,
     };
 
     const filePath = await save({
@@ -307,6 +314,7 @@ class ExportService {
             traits: char.traits,
             status: char.status,
             metadata: char.metadata,
+            visualDescriptors: char.visualDescriptors ?? [],
           });
         }
       }
@@ -394,6 +402,36 @@ class ExportService {
             createdAt: entry.createdAt || Date.now(),
             updatedAt: Date.now(),
             loreManagementBlacklisted: entry.loreManagementBlacklisted || false,
+          });
+        }
+      }
+
+      // Import embedded images (added in v1.4.0)
+      if (data.embeddedImages) {
+        for (const image of data.embeddedImages) {
+          const newImageId = crypto.randomUUID();
+          oldToNewId.set(image.id, newImageId);
+
+          // Map the entry ID to the new entry ID
+          const newEntryId = oldToNewId.get(image.entryId);
+          if (!newEntryId) {
+            console.warn(`[Import] Skipping embedded image ${image.id}: entry ${image.entryId} not found`);
+            continue;
+          }
+
+          await database.createEmbeddedImage({
+            id: newImageId,
+            storyId: newStoryId,
+            entryId: newEntryId,
+            sourceText: image.sourceText,
+            prompt: image.prompt,
+            styleId: image.styleId,
+            model: image.model,
+            imageData: image.imageData,
+            width: image.width,
+            height: image.height,
+            status: image.status,
+            errorMessage: image.errorMessage,
           });
         }
       }

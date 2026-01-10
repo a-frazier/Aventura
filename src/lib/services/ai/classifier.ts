@@ -44,6 +44,9 @@ export interface CharacterUpdate {
     relationship?: string;
     newTraits?: string[];
     removeTraits?: string[];
+    // Visual descriptors for image generation
+    addVisualDescriptors?: string[];
+    removeVisualDescriptors?: string[];
   };
 }
 
@@ -70,6 +73,8 @@ export interface NewCharacter {
   description: string;
   relationship: string | null;
   traits: string[];
+  // Visual appearance descriptors for image generation (hair, clothing, features)
+  visualDescriptors: string[];
 }
 
 export interface NewLocation {

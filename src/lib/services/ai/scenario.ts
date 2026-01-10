@@ -415,7 +415,8 @@ class ScenarioService {
     const genreLabel = genre === 'custom' && customGenre ? customGenre : genre;
 
     const promptContext = this.getWizardPromptContext();
-    const systemPrompt = promptService.renderPrompt('setting-expansion', promptContext);
+    // Use custom system prompt if provided, otherwise use the template
+    const systemPrompt = overrides?.systemPrompt || promptService.renderPrompt('setting-expansion', promptContext);
 
     // Build lorebook context if entries are provided - include ALL entries with full descriptions
     // to avoid hallucinating details that contradict established lore
@@ -533,7 +534,8 @@ class ScenarioService {
     const settingInstruction = setting
       ? `- Make the character fit naturally into: ${setting.name}`
       : '';
-    const systemPrompt = promptService.renderPrompt('character-elaboration', promptContext, {
+    // Use custom system prompt if provided, otherwise use the template
+    const systemPrompt = overrides?.systemPrompt || promptService.renderPrompt('character-elaboration', promptContext, {
       toneInstruction,
       settingInstruction,
     });
@@ -634,7 +636,8 @@ class ScenarioService {
       : 'This is for a creative writing project where this character drives the narrative.';
 
     const promptContext = this.getWizardPromptContext(mode, pov);
-    const systemPrompt = promptService.renderPrompt('protagonist-generation', promptContext);
+    // Use custom system prompt if provided, otherwise use the template
+    const systemPrompt = overrides?.systemPrompt || promptService.renderPrompt('protagonist-generation', promptContext);
     const povInstruction = `${povContext}\n${modeContext}`;
     const settingDescription = `${setting.description}\n\nATMOSPHERE: ${setting.atmosphere}\n\nTHEMES: ${setting.themes.join(', ')}`;
 
@@ -711,10 +714,12 @@ class ScenarioService {
     const genreLabel = genre === 'custom' && customGenre ? customGenre : genre;
 
     const promptContext = this.getWizardPromptContext('adventure', 'second', 'present', protagonist.name);
+    // Use custom system prompt if provided, otherwise use the template
+    const systemPrompt = overrides?.systemPrompt || promptService.renderPrompt('supporting-characters', promptContext);
     const messages: Message[] = [
       {
         role: 'system',
-        content: promptService.renderPrompt('supporting-characters', promptContext)
+        content: systemPrompt
       },
       {
         role: 'user',
@@ -780,7 +785,7 @@ class ScenarioService {
     });
 
     const provider = this.getProvider(overrides?.profileId || undefined);
-    const { systemPrompt, userPrompt } = this.buildOpeningPrompts(wizardData, lorebookEntries, 'json');
+    const { systemPrompt, userPrompt } = this.buildOpeningPrompts(wizardData, lorebookEntries, 'json', overrides?.systemPrompt);
 
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
@@ -839,7 +844,7 @@ class ScenarioService {
     log('streamOpening called', { hasOverrides: !!overrides, profileId: overrides?.profileId });
 
     const provider = this.getProvider(overrides?.profileId || undefined);
-    const { systemPrompt, userPrompt } = this.buildOpeningPrompts(wizardData, undefined, 'stream');
+    const { systemPrompt, userPrompt } = this.buildOpeningPrompts(wizardData, undefined, 'stream', overrides?.systemPrompt);
 
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
@@ -870,7 +875,8 @@ class ScenarioService {
   private buildOpeningPrompts(
     wizardData: WizardData,
     lorebookEntries?: { name: string; type: string; description: string; hiddenInfo?: string }[],
-    outputMode: 'json' | 'stream' = 'json'
+    outputMode: 'json' | 'stream' = 'json',
+    customSystemPrompt?: string
   ): { systemPrompt: string; userPrompt: string } {
     const { mode, genre, customGenre, expandedSetting, protagonist, characters, writingStyle, title } = wizardData;
     const genreLabel = genre === 'custom' && customGenre ? customGenre : genre;
@@ -887,7 +893,8 @@ class ScenarioService {
     const tone = writingStyle.tone || 'immersive and engaging';
     const outputFormat = this.getOpeningOutputFormat(mode, protagonistName, outputMode);
 
-    const systemPrompt = promptService.renderPrompt(templateId, promptContext, {
+    // Use custom system prompt if provided, otherwise use the template
+    const systemPrompt = customSystemPrompt || promptService.renderPrompt(templateId, promptContext, {
       genreLabel,
       mode,
       tenseInstruction,

@@ -13,7 +13,7 @@
   } from '$lib/services/ai/scenario';
   import { serializeManualBody } from '$lib/services/ai/requestOverrides';
   import type { ReasoningEffort } from '$lib/types';
-  import { X, Key, Cpu, Palette, RefreshCw, Search, Settings2, RotateCcw, ChevronDown, ChevronUp, Brain, BookOpen, Lightbulb, Sparkles, Clock, Download, Loader2, Save, FolderOpen, ListChecks, Scroll } from 'lucide-svelte';
+  import { X, Key, Cpu, Palette, RefreshCw, Search, Settings2, RotateCcw, ChevronDown, ChevronUp, Brain, BookOpen, Lightbulb, Sparkles, Clock, Download, Loader2, Save, FolderOpen, ListChecks, Scroll, Image } from 'lucide-svelte';
   import { promptService, type PromptTemplate, type MacroOverride, type Macro, type SimpleMacro, type ComplexMacro } from '$lib/services/prompts';
   import PromptEditor from '../prompts/PromptEditor.svelte';
   import MacroChip from '../prompts/MacroChip.svelte';
@@ -27,7 +27,7 @@
   import type { APIProfile } from '$lib/types';
   import { updaterService, type UpdateInfo, type UpdateProgress } from '$lib/services/updater';
 
-  let activeTab = $state<'api' | 'generation' | 'ui' | 'prompts' | 'advanced'>('api');
+  let activeTab = $state<'api' | 'generation' | 'ui' | 'prompts' | 'images' | 'advanced'>('api');
 
   // Advanced settings section state
   let showWizardSection = $state(false);
@@ -39,6 +39,7 @@
   let showEntryRetrievalSection = $state(false);
   let showLoreManagementSection = $state(false);
   let showTimelineFillSection = $state(false);
+  let showSceneAnalysisSection = $state(false);
   let editingLorebookClassifier = $state(false);
   let editingProcess = $state<keyof AdvancedWizardSettings | null>(null);
 
@@ -630,7 +631,7 @@
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 border-b border-surface-700 py-2 overflow-x-auto scrollbar-hide flex-shrink-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+    <div class="flex gap-1 border-b border-surface-700 py-2 overflow-x-auto flex-shrink-0 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-slim">
       <button
         class="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm min-h-[40px] flex-shrink-0"
         class:bg-surface-700={activeTab === 'api'}
@@ -673,6 +674,17 @@
         <Scroll class="h-4 w-4" />
         <span class="hidden xs:inline">Prompts</span>
         <span class="xs:hidden">Pmt</span>
+      </button>
+      <button
+        class="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm min-h-[40px] flex-shrink-0"
+        class:bg-surface-700={activeTab === 'images'}
+        class:text-surface-100={activeTab === 'images'}
+        class:text-surface-400={activeTab !== 'images'}
+        onclick={() => activeTab = 'images'}
+      >
+        <Image class="h-4 w-4" />
+        <span class="hidden xs:inline">Images</span>
+        <span class="xs:hidden">Img</span>
       </button>
       <button
         class="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 text-sm min-h-[40px] flex-shrink-0"
@@ -1297,6 +1309,183 @@
               </div>
             </div>
           </div>
+        </div>
+      {:else if activeTab === 'images'}
+        <div class="space-y-4">
+          <!-- Enable Image Generation Toggle -->
+          <div class="border-b border-surface-700 pb-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-medium text-surface-200">Automatic Image Generation</h3>
+                <p class="text-xs text-surface-500">Generate images for visually striking moments in the narrative using NanoGPT.</p>
+              </div>
+              <button
+                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                class:bg-accent-600={settings.systemServicesSettings.imageGeneration.enabled}
+                class:bg-surface-600={!settings.systemServicesSettings.imageGeneration.enabled}
+                onclick={() => {
+                  settings.systemServicesSettings.imageGeneration.enabled = !settings.systemServicesSettings.imageGeneration.enabled;
+                  settings.saveSystemServicesSettings();
+                }}
+                aria-label="Toggle image generation"
+              >
+                <span
+                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                  class:translate-x-6={settings.systemServicesSettings.imageGeneration.enabled}
+                  class:translate-x-1={!settings.systemServicesSettings.imageGeneration.enabled}
+                ></span>
+              </button>
+            </div>
+          </div>
+
+          {#if settings.systemServicesSettings.imageGeneration.enabled}
+            <!-- NanoGPT API Key -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-surface-300">
+                NanoGPT API Key
+              </label>
+              <p class="text-xs text-surface-500">API key for NanoGPT image generation.</p>
+              <div class="flex gap-2">
+                <input
+                  type="password"
+                  class="input input-sm flex-1 bg-surface-800 border-surface-600 text-surface-100"
+                  value={settings.systemServicesSettings.imageGeneration.nanoGptApiKey}
+                  oninput={(e) => {
+                    settings.systemServicesSettings.imageGeneration.nanoGptApiKey = e.currentTarget.value;
+                    settings.saveSystemServicesSettings();
+                  }}
+                  placeholder="Enter your NanoGPT API key"
+                />
+                {#if settings.apiSettings.profiles.some(p => p.baseUrl?.includes('nano-gpt.com') && p.apiKey)}
+                  <button
+                    class="btn btn-secondary text-xs whitespace-nowrap"
+                    onclick={() => {
+                      const nanoProfile = settings.apiSettings.profiles.find(p => p.baseUrl?.includes('nano-gpt.com') && p.apiKey);
+                      if (nanoProfile?.apiKey) {
+                        settings.systemServicesSettings.imageGeneration.nanoGptApiKey = nanoProfile.apiKey;
+                        settings.saveSystemServicesSettings();
+                      }
+                    }}
+                  >
+                    Autofill from Profile
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Image Model -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-surface-300">
+                Image Model
+              </label>
+              <p class="text-xs text-surface-500">The NanoGPT image model to use.</p>
+              <input
+                type="text"
+                class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
+                value={settings.systemServicesSettings.imageGeneration.model}
+                oninput={(e) => {
+                  settings.systemServicesSettings.imageGeneration.model = e.currentTarget.value;
+                  settings.saveSystemServicesSettings();
+                }}
+                placeholder="z-image-turbo"
+              />
+            </div>
+
+            <!-- Image Style -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-surface-300">
+                Image Style
+              </label>
+              <p class="text-xs text-surface-500">Visual style for generated images. Edit styles in the Prompts tab.</p>
+              <select
+                class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
+                value={settings.systemServicesSettings.imageGeneration.styleId}
+                onchange={(e) => {
+                  settings.systemServicesSettings.imageGeneration.styleId = e.currentTarget.value;
+                  settings.saveSystemServicesSettings();
+                }}
+              >
+                <option value="image-style-soft-anime">Soft Anime</option>
+                <option value="image-style-semi-realistic">Semi-realistic Anime</option>
+                <option value="image-style-photorealistic">Photorealistic</option>
+              </select>
+            </div>
+
+            <!-- Image Size -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-surface-300">
+                Image Size
+              </label>
+              <select
+                class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
+                value={settings.systemServicesSettings.imageGeneration.size}
+                onchange={(e) => {
+                  settings.systemServicesSettings.imageGeneration.size = e.currentTarget.value as '512x512' | '1024x1024';
+                  settings.saveSystemServicesSettings();
+                }}
+              >
+                <option value="512x512">512x512 (Faster)</option>
+                <option value="1024x1024">1024x1024 (Higher Quality)</option>
+              </select>
+            </div>
+
+            <!-- Max Images Per Message -->
+            <div class="space-y-2">
+              <label class="text-sm font-medium text-surface-300">
+                Max Images Per Message: {settings.systemServicesSettings.imageGeneration.maxImagesPerMessage === 0 ? 'Unlimited' : settings.systemServicesSettings.imageGeneration.maxImagesPerMessage}
+              </label>
+              <p class="text-xs text-surface-500">Maximum images per narrative (0 = unlimited).</p>
+              <input
+                type="range"
+                min="0"
+                max="5"
+                step="1"
+                class="range range-xs range-accent w-full"
+                value={settings.systemServicesSettings.imageGeneration.maxImagesPerMessage}
+                oninput={(e) => {
+                  settings.systemServicesSettings.imageGeneration.maxImagesPerMessage = parseInt(e.currentTarget.value);
+                  settings.saveSystemServicesSettings();
+                }}
+              />
+            </div>
+
+            <!-- Auto Generate Toggle -->
+            <div class="border-t border-surface-700 pt-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-medium text-surface-200">Auto-Generate</h3>
+                  <p class="text-xs text-surface-500">Automatically generate images after each narration.</p>
+                </div>
+                <button
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                  class:bg-accent-600={settings.systemServicesSettings.imageGeneration.autoGenerate}
+                  class:bg-surface-600={!settings.systemServicesSettings.imageGeneration.autoGenerate}
+                  onclick={() => {
+                    settings.systemServicesSettings.imageGeneration.autoGenerate = !settings.systemServicesSettings.imageGeneration.autoGenerate;
+                    settings.saveSystemServicesSettings();
+                  }}
+                  aria-label="Toggle auto-generate"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                    class:translate-x-6={settings.systemServicesSettings.imageGeneration.autoGenerate}
+                    class:translate-x-1={!settings.systemServicesSettings.imageGeneration.autoGenerate}
+                  ></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Reset Button -->
+            <div class="border-t border-surface-700 pt-4 mt-4">
+              <button
+                class="btn btn-secondary text-xs"
+                onclick={() => settings.resetImageGenerationSettings()}
+              >
+                <RotateCcw class="h-3 w-3 mr-1" />
+                Reset to Defaults
+              </button>
+            </div>
+          {/if}
         </div>
       {:else if activeTab === 'advanced'}
         <div class="space-y-4">
@@ -3281,6 +3470,155 @@
                     </div>
                   {/if}
                 </div>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Scene Analysis Section (for Image Generation) -->
+          <div class="border-t border-surface-700 pt-4">
+            <button
+              class="w-full flex items-center justify-between group"
+              onclick={() => showSceneAnalysisSection = !showSceneAnalysisSection}
+            >
+              <div class="flex items-center gap-2">
+                <div class="p-1.5 rounded-lg bg-pink-500/10">
+                  <Image class="h-4 w-4 text-pink-400" />
+                </div>
+                <div class="text-left">
+                  <h3 class="text-sm font-medium text-surface-200">Scene Analysis</h3>
+                  <p class="text-xs text-surface-500">Model for identifying imageable scenes in narrative.</p>
+                </div>
+              </div>
+              <span>
+                {#if showSceneAnalysisSection}
+                  <ChevronUp class="h-4 w-4 text-surface-400" />
+                {:else}
+                  <ChevronDown class="h-4 w-4 text-surface-400" />
+                {/if}
+              </span>
+            </button>
+
+            {#if showSceneAnalysisSection}
+              <div class="mt-4 space-y-4 pl-8 border-l border-surface-700 ml-2">
+                <p class="text-xs text-surface-500">
+                  This model analyzes narrative text to identify visually striking moments for image generation.
+                </p>
+
+                <!-- Profile and Model Selector -->
+                <div class="mb-3">
+                  <ModelSelector
+                    profileId={settings.systemServicesSettings.imageGeneration.promptProfileId}
+                    model={settings.systemServicesSettings.imageGeneration.promptModel}
+                    onProfileChange={(id) => {
+                      settings.systemServicesSettings.imageGeneration.promptProfileId = id;
+                      settings.saveSystemServicesSettings();
+                    }}
+                    onModelChange={(m) => {
+                      settings.systemServicesSettings.imageGeneration.promptModel = m;
+                      settings.saveSystemServicesSettings();
+                    }}
+                    onManageProfiles={() => { showProfileModal = true; editingProfile = null; }}
+                  />
+                </div>
+
+                <!-- Temperature -->
+                <div class:opacity-50={settings.advancedRequestSettings.manualMode}>
+                  <label class="mb-1 block text-xs font-medium text-surface-400">
+                    Temperature: {settings.systemServicesSettings.imageGeneration.promptTemperature.toFixed(2)}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    bind:value={settings.systemServicesSettings.imageGeneration.promptTemperature}
+                    onchange={() => settings.saveSystemServicesSettings()}
+                    class="range range-xs range-accent w-full"
+                    disabled={settings.advancedRequestSettings.manualMode}
+                  />
+                </div>
+
+                <!-- Max Tokens -->
+                <div class:opacity-50={settings.advancedRequestSettings.manualMode}>
+                  <label class="mb-1 block text-xs font-medium text-surface-400">
+                    Max Tokens: {settings.systemServicesSettings.imageGeneration.promptMaxTokens}
+                  </label>
+                  <input
+                    type="range"
+                    min="512"
+                    max="4096"
+                    step="256"
+                    bind:value={settings.systemServicesSettings.imageGeneration.promptMaxTokens}
+                    onchange={() => settings.saveSystemServicesSettings()}
+                    class="range range-xs range-accent w-full"
+                    disabled={settings.advancedRequestSettings.manualMode}
+                  />
+                </div>
+
+                <!-- Provider Only -->
+                <div class="mb-3" class:opacity-50={settings.advancedRequestSettings.manualMode}>
+                  <ProviderOnlySelector
+                    providers={providerOptions}
+                    selected={settings.systemServicesSettings.imageGeneration.providerOnly}
+                    onChange={(next) => {
+                      settings.systemServicesSettings.imageGeneration.providerOnly = next;
+                      settings.saveSystemServicesSettings();
+                    }}
+                    disabled={settings.advancedRequestSettings.manualMode}
+                  />
+                </div>
+
+                <!-- Thinking -->
+                <div class="mb-3" class:opacity-50={settings.advancedRequestSettings.manualMode}>
+                  <label class="mb-1 block text-xs font-medium text-surface-400">
+                    Thinking: {reasoningLabels[settings.systemServicesSettings.imageGeneration.reasoningEffort]}
+                  </label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="3"
+                    step="1"
+                    value={getReasoningIndex(settings.systemServicesSettings.imageGeneration.reasoningEffort)}
+                    onchange={(e) => {
+                      settings.systemServicesSettings.imageGeneration.reasoningEffort = getReasoningValue(parseInt(e.currentTarget.value));
+                      settings.saveSystemServicesSettings();
+                    }}
+                    disabled={settings.advancedRequestSettings.manualMode}
+                    class="range range-xs range-accent w-full"
+                  />
+                  <div class="flex justify-between text-xs text-surface-500">
+                    <span>Off</span>
+                    <span>Low</span>
+                    <span>Medium</span>
+                    <span>High</span>
+                  </div>
+                </div>
+
+                {#if settings.advancedRequestSettings.manualMode}
+                  <div class="border-t border-surface-700 pt-3">
+                    <div class="mb-1 flex items-center justify-between">
+                      <label class="text-xs font-medium text-surface-400">Manual Request Body (JSON)</label>
+                      <button
+                        class="text-xs text-accent-400 hover:text-accent-300"
+                        onclick={() => openManualBodyEditor('Scene Analysis', settings.systemServicesSettings.imageGeneration.manualBody, (next) => {
+                          settings.systemServicesSettings.imageGeneration.manualBody = next;
+                          settings.saveSystemServicesSettings();
+                        })}
+                      >
+                        Pop out
+                      </button>
+                    </div>
+                    <textarea
+                      bind:value={settings.systemServicesSettings.imageGeneration.manualBody}
+                      onblur={() => settings.saveSystemServicesSettings()}
+                      class="input text-xs min-h-[140px] resize-y font-mono w-full"
+                      rows="6"
+                    ></textarea>
+                    <p class="text-xs text-surface-500 mt-1">
+                      Overrides request parameters; messages and tools are managed by Aventura.
+                    </p>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
