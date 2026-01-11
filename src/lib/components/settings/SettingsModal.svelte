@@ -1374,23 +1374,25 @@
               </div>
             </div>
 
-            <!-- Image Model -->
-            <div class="space-y-2">
-              <label class="text-sm font-medium text-surface-300">
-                Image Model
-              </label>
-              <p class="text-xs text-surface-500">The NanoGPT image model to use.</p>
-              <input
-                type="text"
-                class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
-                value={settings.systemServicesSettings.imageGeneration.model}
-                oninput={(e) => {
-                  settings.systemServicesSettings.imageGeneration.model = e.currentTarget.value;
-                  settings.saveSystemServicesSettings();
-                }}
-                placeholder="z-image-turbo"
-              />
-            </div>
+            <!-- Image Model (hidden when portrait mode is enabled) -->
+            {#if !settings.systemServicesSettings.imageGeneration.portraitMode}
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-surface-300">
+                  Image Model
+                </label>
+                <p class="text-xs text-surface-500">The NanoGPT image model to use.</p>
+                <input
+                  type="text"
+                  class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
+                  value={settings.systemServicesSettings.imageGeneration.model}
+                  oninput={(e) => {
+                    settings.systemServicesSettings.imageGeneration.model = e.currentTarget.value;
+                    settings.saveSystemServicesSettings();
+                  }}
+                  placeholder="z-image-turbo"
+                />
+              </div>
+            {/if}
 
             <!-- Image Style -->
             <div class="space-y-2">
@@ -1475,6 +1477,70 @@
                 </button>
               </div>
             </div>
+
+            <!-- Portrait Reference Mode -->
+            <div class="border-t border-surface-700 pt-4 mt-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-medium text-surface-200">Portrait Reference Mode</h3>
+                  <p class="text-xs text-surface-500">Use character portraits as reference images when generating story images.</p>
+                </div>
+                <button
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                  class:bg-accent-600={settings.systemServicesSettings.imageGeneration.portraitMode}
+                  class:bg-surface-600={!settings.systemServicesSettings.imageGeneration.portraitMode}
+                  onclick={() => {
+                    settings.systemServicesSettings.imageGeneration.portraitMode = !settings.systemServicesSettings.imageGeneration.portraitMode;
+                    settings.saveSystemServicesSettings();
+                  }}
+                  aria-label="Toggle portrait mode"
+                >
+                  <span
+                    class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                    class:translate-x-6={settings.systemServicesSettings.imageGeneration.portraitMode}
+                    class:translate-x-1={!settings.systemServicesSettings.imageGeneration.portraitMode}
+                  ></span>
+                </button>
+              </div>
+            </div>
+
+            {#if settings.systemServicesSettings.imageGeneration.portraitMode}
+              <!-- Portrait Generation Model -->
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-surface-300">
+                  Portrait Generation Model
+                </label>
+                <p class="text-xs text-surface-500">Model used when generating character portraits from visual descriptors.</p>
+                <input
+                  type="text"
+                  class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
+                  value={settings.systemServicesSettings.imageGeneration.portraitModel}
+                  oninput={(e) => {
+                    settings.systemServicesSettings.imageGeneration.portraitModel = e.currentTarget.value;
+                    settings.saveSystemServicesSettings();
+                  }}
+                  placeholder="z-image-turbo"
+                />
+              </div>
+
+              <!-- Reference Image Model -->
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-surface-300">
+                  Reference Image Model
+                </label>
+                <p class="text-xs text-surface-500">Model used for story images when a character portrait is attached as reference.</p>
+                <input
+                  type="text"
+                  class="input input-sm w-full bg-surface-800 border-surface-600 text-surface-100"
+                  value={settings.systemServicesSettings.imageGeneration.referenceModel}
+                  oninput={(e) => {
+                    settings.systemServicesSettings.imageGeneration.referenceModel = e.currentTarget.value;
+                    settings.saveSystemServicesSettings();
+                  }}
+                  placeholder="qwen-image"
+                />
+              </div>
+            {/if}
 
             <!-- Reset Button -->
             <div class="border-t border-surface-700 pt-4 mt-4">

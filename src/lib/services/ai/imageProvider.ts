@@ -11,6 +11,7 @@ export interface ImageGenerationRequest {
   n?: number;
   size?: string;
   response_format?: 'b64_json' | 'url';
+  imageDataUrls?: string[];  // Reference images for image-to-image generation (e.g., character portraits)
 }
 
 export interface ImageGenerationResponse {

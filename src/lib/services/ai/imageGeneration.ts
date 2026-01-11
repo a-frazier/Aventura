@@ -16,7 +16,9 @@ import { NanoGPTImageProvider } from './nanoGPTImageProvider';
 import { database } from '$lib/services/database';
 import { promptService } from '$lib/services/prompts';
 import { settings } from '$lib/stores/settings.svelte';
+import { story } from '$lib/stores/story.svelte';
 import { emitImageQueued, emitImageReady } from '$lib/services/events';
+import { normalizeImageDataUrl } from '$lib/utils/image';
 
 const DEBUG = true;
 
@@ -80,11 +82,21 @@ export class ImageGenerationService {
       return;
     }
 
+    // Check if portrait mode is enabled
+    const portraitMode = imageSettings.portraitMode ?? false;
+
+    // Build list of character names that have portraits
+    const charactersWithPortraits = context.presentCharacters
+      .filter(c => c.portrait)
+      .map(c => c.name);
+
     log('Starting image generation', {
       storyId: context.storyId,
       entryId: context.entryId,
       narrativeLength: context.narrativeResponse.length,
       presentCharacters: context.presentCharacters.length,
+      portraitMode,
+      charactersWithPortraits,
     });
 
     try {
@@ -112,6 +124,8 @@ export class ImageGenerationService {
         maxImages,
         chatHistory: context.chatHistory,
         lorebookContext: context.lorebookContext,
+        charactersWithPortraits,
+        portraitMode,
       };
 
       // Identify imageable scenes
@@ -120,6 +134,7 @@ export class ImageGenerationService {
       log('Scenes identified', {
         count: scenes.length,
         types: scenes.map(s => s.sceneType),
+        characters: scenes.map(s => s.character),
       });
 
       if (scenes.length === 0) {
@@ -144,7 +159,8 @@ export class ImageGenerationService {
           context.storyId,
           context.entryId,
           scene,
-          imageSettings
+          imageSettings,
+          context.presentCharacters
         );
       }
 
@@ -192,9 +208,51 @@ export class ImageGenerationService {
     storyId: string,
     entryId: string,
     scene: ImageableScene,
-    imageSettings: typeof settings.systemServicesSettings.imageGeneration
+    imageSettings: typeof settings.systemServicesSettings.imageGeneration,
+    presentCharacters: Character[]
   ): Promise<void> {
+    // Handle portrait generation for new characters
+    if (scene.generatePortrait && scene.character) {
+      log('Generating portrait for new character', { character: scene.character });
+      await this.generateCharacterPortrait(
+        storyId,
+        scene.character,
+        scene.prompt,
+        imageSettings,
+        presentCharacters
+      );
+      return;
+    }
+
     const imageId = crypto.randomUUID();
+
+    // Determine if we should use a reference image
+    let referenceImageUrls: string[] | undefined;
+    let modelToUse = imageSettings.model;
+
+    // If portrait mode is enabled and scene has a character, look for their portrait
+    if (imageSettings.portraitMode && scene.character) {
+      const character = presentCharacters.find(
+        c => c.name.toLowerCase() === scene.character!.toLowerCase()
+      );
+
+      const portraitUrl = normalizeImageDataUrl(character?.portrait);
+      if (portraitUrl) {
+        // Use reference model (default: qwen-image) and attach portrait
+        modelToUse = imageSettings.referenceModel || 'qwen-image';
+        referenceImageUrls = [portraitUrl];
+        log('Using character portrait as reference', {
+          character: scene.character,
+          model: modelToUse,
+        });
+      } else {
+        // In portrait mode, skip scene images for characters without portraits
+        log('Skipping scene - character has no portrait in portrait mode', {
+          character: scene.character,
+        });
+        return;
+      }
+    }
 
     // Create pending record in database
     const embeddedImage: Omit<EmbeddedImage, 'createdAt'> = {
@@ -204,7 +262,7 @@ export class ImageGenerationService {
       sourceText: scene.sourceText,
       prompt: scene.prompt,
       styleId: imageSettings.styleId,
-      model: imageSettings.model,
+      model: modelToUse,
       imageData: '',
       width: imageSettings.size === '1024x1024' ? 1024 : 512,
       height: imageSettings.size === '1024x1024' ? 1024 : 512,
@@ -212,15 +270,86 @@ export class ImageGenerationService {
     };
 
     await database.createEmbeddedImage(embeddedImage);
-    log('Created pending image record', { imageId, sourceText: scene.sourceText });
+    log('Created pending image record', { imageId, sourceText: scene.sourceText, model: modelToUse });
 
     // Emit queued event
     emitImageQueued(imageId, entryId);
 
     // Start async generation (fire-and-forget)
-    this.generateImage(imageId, scene.prompt, imageSettings, entryId).catch(error => {
+    this.generateImage(imageId, scene.prompt, imageSettings, entryId, modelToUse, referenceImageUrls).catch(error => {
       log('Async image generation failed', { imageId, error });
     });
+  }
+
+  /**
+   * Generate a portrait for a character and save it to their profile
+   */
+  private async generateCharacterPortrait(
+    storyId: string,
+    characterName: string,
+    prompt: string,
+    imageSettings: typeof settings.systemServicesSettings.imageGeneration,
+    presentCharacters: Character[]
+  ): Promise<void> {
+    try {
+      // Find the character
+      const character = presentCharacters.find(
+        c => c.name.toLowerCase() === characterName.toLowerCase()
+      );
+
+      if (!character) {
+        log('Character not found for portrait generation', { characterName });
+        return;
+      }
+
+      if (character.portrait) {
+        log('Character already has portrait, skipping', { characterName });
+        return;
+      }
+
+      // Get API key from settings
+      const apiKey = imageSettings.nanoGptApiKey;
+      if (!apiKey) {
+        throw new Error('No NanoGPT API key configured for portrait generation');
+      }
+
+      // Create provider if needed
+      if (!this.imageProvider) {
+        this.imageProvider = new NanoGPTImageProvider(apiKey);
+      }
+
+      log('Generating portrait', { characterName, model: imageSettings.portraitModel });
+
+      // Generate portrait using portrait model
+      const response = await this.imageProvider.generateImage({
+        prompt,
+        model: imageSettings.portraitModel || 'z-image-turbo',
+        size: '1024x1024',
+        response_format: 'b64_json',
+      });
+
+      if (response.images.length === 0 || !response.images[0].b64_json) {
+        throw new Error('No image data returned for portrait');
+      }
+
+      const portraitDataUrl = `data:image/png;base64,${response.images[0].b64_json}`;
+
+      // Update character with portrait
+      await database.updateCharacter(character.id, {
+        portrait: portraitDataUrl,
+      });
+
+      if (story.currentStory?.id === storyId) {
+        story.characters = story.characters.map(c =>
+          c.id === character.id ? { ...c, portrait: portraitDataUrl } : c
+        );
+      }
+
+      log('Portrait generated and saved', { characterName, characterId: character.id });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log('Portrait generation failed', { characterName, error: errorMessage });
+    }
   }
 
   /**
@@ -230,7 +359,9 @@ export class ImageGenerationService {
     imageId: string,
     prompt: string,
     imageSettings: typeof settings.systemServicesSettings.imageGeneration,
-    entryId: string
+    entryId: string,
+    modelOverride?: string,
+    referenceImageUrls?: string[]
   ): Promise<void> {
     try {
       // Update status to generating
@@ -250,9 +381,10 @@ export class ImageGenerationService {
       // Generate image
       const response = await this.imageProvider.generateImage({
         prompt,
-        model: imageSettings.model,
+        model: modelOverride || imageSettings.model,
         size: imageSettings.size,
         response_format: 'b64_json',
+        imageDataUrls: referenceImageUrls,
       });
 
       if (response.images.length === 0 || !response.images[0].b64_json) {
@@ -265,7 +397,7 @@ export class ImageGenerationService {
         status: 'complete',
       });
 
-      log('Image generated successfully', { imageId });
+      log('Image generated successfully', { imageId, hasReference: !!referenceImageUrls });
 
       // Emit ready event
       emitImageReady(imageId, entryId, true);

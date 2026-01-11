@@ -315,6 +315,7 @@ class UIStore {
       status: c.status,
       relationship: c.relationship ?? null,
       visualDescriptors: [...(c.visualDescriptors ?? [])],
+      portrait: c.portrait,
     }));
 
     // Create new backup and store by story ID

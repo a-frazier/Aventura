@@ -1633,7 +1633,7 @@ const photorealisticStyleTemplate: PromptTemplate = {
   content: `Photorealistic digital art with true-to-life rendering. Natural lighting with accurate shadows and highlights. Detailed textures on skin, fabric, and materials. Accurate human proportions and anatomy. Professional photography aesthetic with cinematic depth of field. High dynamic range with realistic contrast. Detailed environments with accurate perspective. Materials rendered with proper reflectance and subsurface scattering where appropriate. Film grain optional for cinematic feel. 8K quality, hyperrealistic detail.`,
 };
 
-// Image prompt analysis service template
+// Image prompt analysis service template (legacy mode - full character descriptions)
 const imagePromptAnalysisTemplate: PromptTemplate = {
   id: 'image-prompt-analysis',
   name: 'Image Prompt Analysis',
@@ -1642,7 +1642,7 @@ const imagePromptAnalysisTemplate: PromptTemplate = {
   content: `You identify visually striking moments in narrative text for image generation.
 
 ## Your Task
-Analyze the narrative and identify 0-{{maxImages}} key visual moments. Create DETAILED, descriptive image prompts (aim for 500-800 characters each). **Do NOT exceed 800 characters per prompt - prompts over 800 characters will cause an error and fail to generate.**
+Analyze the narrative and identify 0-{{maxImages}} key visual moments (0 = unlimited). Create DETAILED, descriptive image prompts (aim for 500-800 characters each). **Do NOT exceed 800 characters per prompt - prompts over 800 characters will cause an error and fail to generate.**
 
 ## Style (MUST include in every prompt)
 {{imageStylePrompt}}
@@ -1706,6 +1706,136 @@ Return a JSON array (no markdown, just raw JSON):
 Identify the most visually striking moments and return the JSON array.`,
 };
 
+// Image prompt analysis with reference images (portrait mode - simplified prompts)
+const imagePromptAnalysisReferenceTemplate: PromptTemplate = {
+  id: 'image-prompt-analysis-reference',
+  name: 'Image Prompt Analysis (Reference Mode)',
+  category: 'service',
+  description: 'Identifies imageable scenes for generation with character reference images',
+  content: `You identify visually striking moments in narrative text for image generation WITH REFERENCE IMAGES.
+
+## Your Task
+Analyze the narrative and identify 0-{{maxImages}} key visual moments (0 = unlimited). Create image prompts (aim for 400-600 characters each). **Do NOT exceed 600 characters per prompt.**
+
+IMPORTANT: In portrait mode, ONLY characters with portraits can be depicted in images. Characters without portraits CANNOT appear in generated images until they have a portrait.
+
+## Style (MUST include in every prompt)
+{{imageStylePrompt}}
+
+## Characters With Portraits (CAN be depicted)
+{{charactersWithPortraits}}
+
+ONLY these characters can appear in images. When depicting them, do NOT describe their appearance - the reference image provides that. Focus on action, pose, and environment.
+
+## Character Visual Descriptors (for portrait generation reference)
+{{characterDescriptors}}
+
+## Output Format
+Return a JSON array (no markdown, just raw JSON):
+[
+  {
+    "prompt": "Prompt (400-600 chars) - for characters with portraits, focus on action/pose/environment, NOT appearance",
+    "sourceText": "exact phrase from narrative (3-15 words, VERBATIM)",
+    "sceneType": "action|item|character|environment",
+    "priority": 1-10,
+    "character": "CharacterName or none",
+    "generatePortrait": false
+  }
+]
+
+## generatePortrait Field - Creating Portraits for New Characters
+When a NEW named character is introduced who does NOT have a portrait yet (not in "Characters With Portraits" list):
+- You MAY request portrait generation by setting "generatePortrait": true
+- This will create a portrait for them so they CAN be depicted in FUTURE images
+- CRITICAL: You CANNOT use that portrait in the same output - it won't exist until the next turn
+- When generatePortrait is true: create a portrait-style prompt (head/shoulders, neutral background)
+- For portrait prompts: use the character's visual descriptors to describe their appearance
+
+## Prompt Structure (for scenes WITH character reference)
+1. **"The character"** - Do NOT describe appearance, the reference image provides this
+2. **Action/pose** - what they're doing, body position, expression (if dramatic)
+3. **Setting/environment** - where they are, lighting, atmosphere, background details
+4. **Style keywords** - copy relevant phrases from the Style section
+
+## Prompt Structure (for portrait generation - generatePortrait: true)
+1. **Character appearance** - use visual descriptors to describe hair, eyes, skin, features
+2. **Expression** - neutral or slight smile
+3. **Framing** - head and shoulders, portrait composition
+4. **Background** - simple, neutral (gradient or soft bokeh)
+5. **Style keywords** - from the Style section
+
+## Example Outputs
+
+**Scene with existing portrait:**
+{
+  "prompt": "The character wielding a glowing sword in defensive stance. Rain-soaked alley at night, neon reflections. Dramatic backlighting. Semi-realistic anime style.",
+  "sourceText": "gripped her sword tightly",
+  "sceneType": "action",
+  "priority": 8,
+  "character": "Elena",
+  "generatePortrait": false
+}
+
+**Creating portrait for NEW character:**
+{
+  "prompt": "Portrait of a tall man with short grey hair and weathered face, deep-set brown eyes with crow's feet. Strong jaw, slight stubble. Wearing dark leather armor. Head and shoulders, neutral background with soft blue gradient. Semi-realistic anime style, refined features.",
+  "sourceText": "the old mercenary stepped forward",
+  "sceneType": "character",
+  "priority": 7,
+  "character": "Marcus",
+  "generatePortrait": true
+}
+
+**Environment (no character):**
+{
+  "prompt": "Ancient library with towering bookshelves, dust motes in shafts of golden light through stained glass windows. Soft anime style, atmospheric.",
+  "sourceText": "the vast library stretched before them",
+  "sceneType": "environment",
+  "priority": 5,
+  "character": "none",
+  "generatePortrait": false
+}
+
+## CRITICAL Rules
+1. **ONLY depict characters WITH portraits** - characters without portraits CANNOT appear in scene images
+2. **ONE CHARACTER PER IMAGE** - only depict a single character per prompt
+3. **For characters WITH portraits** - do NOT describe appearance, just action/pose/environment
+4. **generatePortrait** - use to CREATE portraits for new characters (cannot use same turn)
+5. **ALWAYS include style** - copy style keywords from the Style section
+6. **Stay under 600 characters**
+7. **sourceText** MUST be COPY-PASTED EXACTLY from the narrative
+8. Return empty array [] if no suitable visual moments exist
+
+## Priority Guidelines
+- 8-10: Dramatic actions, combat, pivotal moments
+- 6-8: Significant items, magical effects, character introductions worth generating a portrait for
+- 5-7: Character emotions, reveals
+- 3-5: Environmental shots, atmosphere`,
+  userContent: `## Story Context
+{{chatHistory}}
+
+{{lorebookContext}}
+
+## User Action
+{{userAction}}
+
+## Narrative to Analyze
+{{narrativeResponse}}
+
+Identify the most visually striking moments and return the JSON array. Remember: only characters with portraits can be depicted in scene images. Use generatePortrait to create portraits for important new characters.`,
+};
+
+// Portrait generation template - direct image prompt (not LLM instructions)
+// This template is rendered and sent directly to the image generation API
+const imagePortraitGenerationTemplate: PromptTemplate = {
+  id: 'image-portrait-generation',
+  name: 'Portrait Generation',
+  category: 'service',
+  description: 'Direct image prompt template for character portraits',
+  content: `Full body portrait of a character: {{visualDescriptors}}. Standing in a relaxed natural pose, facing the viewer, full body visible from head to feet. Neutral expression or slight smile. Simple gradient background, non-distracting. Portrait composition, centered framing, professional lighting. {{imageStylePrompt}}`,
+  userContent: '',
+};
+
 // ============================================================================
 // COMBINED PROMPT TEMPLATES
 // ============================================================================
@@ -1728,6 +1858,8 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   agenticRetrievalPromptTemplate,
   characterCardImportPromptTemplate,
   imagePromptAnalysisTemplate,
+  imagePromptAnalysisReferenceTemplate,
+  imagePortraitGenerationTemplate,
   // Wizard prompts
   settingExpansionPromptTemplate,
   protagonistGenerationPromptTemplate,

@@ -59,6 +59,7 @@ export interface PersistentCharacterSnapshot {
   status: 'active' | 'inactive' | 'deceased';
   relationship: string | null;
   visualDescriptors: string[];
+  portrait: string | null;  // Data URL (data:image/...) or legacy base64
 }
 
 // Persistent style review state - saved per-story for style analysis tracking
@@ -130,6 +131,7 @@ export interface Character {
   relationship: string | null;
   traits: string[];
   visualDescriptors: string[];  // Visual appearance details for image generation (hair, clothing, features)
+  portrait: string | null;  // Data URL (data:image/...) for reference in image generation
   status: 'active' | 'inactive' | 'deceased';
   metadata: Record<string, unknown> | null;
 }

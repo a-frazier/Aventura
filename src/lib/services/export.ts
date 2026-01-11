@@ -24,9 +24,10 @@ export interface AventuraExport {
 // v1.2.0 - Added styleReviewState
 // v1.3.0 - Added timeTracker to story, entry metadata (timeStart/timeEnd)
 // v1.4.0 - Added embeddedImages (generated images embedded in story entries)
+// v1.5.0 - Added character portraits
 
 class ExportService {
-  private readonly VERSION = '1.4.0';
+  private readonly VERSION = '1.5.0';
 
   /**
    * Compare semantic versions. Returns:
@@ -60,6 +61,9 @@ class ExportService {
     }
     if (this.compareVersions(importVersion, '1.4.0') < 0) {
       console.warn(`[Import] File from v${importVersion} predates embedded images (v1.4.0). Generated images will not be restored.`);
+    }
+    if (this.compareVersions(importVersion, '1.5.0') < 0) {
+      console.warn(`[Import] File from v${importVersion} predates character portraits (v1.5.0). Character portraits will not be restored.`);
     }
   }
 
@@ -315,6 +319,7 @@ class ExportService {
             status: char.status,
             metadata: char.metadata,
             visualDescriptors: char.visualDescriptors ?? [],
+            portrait: char.portrait ?? null,
           });
         }
       }

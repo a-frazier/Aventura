@@ -76,6 +76,12 @@ pub fn run() {
             sql: include_str!("../migrations/011_image_generation.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 12,
+            description: "add_character_portraits",
+            sql: include_str!("../migrations/012_character_portraits.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

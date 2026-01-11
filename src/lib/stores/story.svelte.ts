@@ -417,6 +417,7 @@ class StoryStore {
           status: 'active',
           metadata: null,
           visualDescriptors: [],
+          portrait: null,
         };
         await database.addCharacter(protagonist);
       }
@@ -705,6 +706,7 @@ class StoryStore {
       status: 'active',
       metadata: null,
       visualDescriptors: [],
+      portrait: null,
     };
 
     await database.addCharacter(character);
@@ -1232,6 +1234,7 @@ class StoryStore {
           visualDescriptors: newChar.visualDescriptors || [],
           status: 'active',
           metadata: { source: 'classifier' },
+          portrait: null,
         };
         await database.addCharacter(character);
         this.characters = [...this.characters, character];
@@ -1853,6 +1856,7 @@ class StoryStore {
           status: snapshot.status ?? character.status,
           relationship,
           visualDescriptors: snapshot.visualDescriptors ?? [],
+          portrait: snapshot.portrait,
         },
       });
     }
@@ -1876,6 +1880,7 @@ class StoryStore {
         status: snapshot.status ?? character.status,
         relationship,
         visualDescriptors: snapshot.visualDescriptors ?? character.visualDescriptors,
+        portrait: snapshot.portrait ?? character.portrait,
       };
     });
 
@@ -1953,7 +1958,8 @@ class StoryStore {
         traits: data.protagonist.traits ?? [],
         status: 'active',
         metadata: { source: 'wizard' },
-        visualDescriptors: [],
+        visualDescriptors: data.protagonist.visualDescriptors ?? [],
+        portrait: data.protagonist.portrait ?? null,
       };
       await database.addCharacter(protagonist);
       log('Added protagonist:', protagonist.name);
@@ -2003,7 +2009,8 @@ class StoryStore {
         traits: charData.traits ?? [],
         status: 'active',
         metadata: { source: 'wizard' },
-        visualDescriptors: [],
+        visualDescriptors: charData.visualDescriptors ?? [],
+        portrait: charData.portrait ?? null,
       };
       await database.addCharacter(character);
       log('Added supporting character:', character.name);

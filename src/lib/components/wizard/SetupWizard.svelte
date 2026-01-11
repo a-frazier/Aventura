@@ -24,6 +24,9 @@ import {
     readCharacterCardFile,
     type CardImportResult,
   } from '$lib/services/characterCardImporter';
+  import { NanoGPTImageProvider } from '$lib/services/ai/nanoGPTImageProvider';
+  import { promptService } from '$lib/services/prompts';
+  import { normalizeImageDataUrl } from '$lib/utils/image';
   import type { StoryMode, POV, EntryType } from '$lib/types';
   import {
     X,
@@ -52,6 +55,8 @@ import {
     Book,
     Trash2,
     Plus,
+    ImageIcon,
+    ImageUp,
   } from 'lucide-svelte';
 
   interface Props {
@@ -62,7 +67,7 @@ import {
 
   // Wizard state
   let currentStep = $state(1);
-  const totalSteps = 7;
+  const totalSteps = 8;
 
   // Step 1: Mode
   let selectedMode = $state<StoryMode>('adventure');
@@ -103,7 +108,18 @@ import {
   let supportingCharacterTraits = $state('');
   let isElaboratingSupportingCharacter = $state(false);
 
-// Step 2: Import Lorebook (optional - moved to early position)
+  // Step 7: Portraits
+  let protagonistVisualDescriptors = $state('');
+  let protagonistPortrait = $state<string | null>(null);
+  let isGeneratingProtagonistPortrait = $state(false);
+  let portraitError = $state<string | null>(null);
+  // Supporting character visual descriptors and portraits keyed by character NAME (not index)
+  // This prevents data loss when characters are removed/reordered
+  let supportingCharacterVisualDescriptors = $state<Record<string, string>>({});
+  let supportingCharacterPortraits = $state<Record<string, string | null>>({});
+  let generatingPortraitName = $state<string | null>(null);
+
+  // Step 2: Import Lorebook (optional - moved to early position)
   let importedLorebook = $state<LorebookImportResult | null>(null);
   let importedEntries = $state<ImportedEntry[]>([]);
   let isImporting = $state(false);
@@ -199,8 +215,9 @@ import {
       case 3: return selectedGenre !== 'custom' || customGenre.trim().length > 0;
       case 4: return settingSeed.trim().length > 0;
       case 5: return true; // Protagonist is optional
-      case 6: return true; // Style always has defaults
-      case 7: return storyTitle.trim().length > 0;
+      case 6: return true; // Portraits are optional
+      case 7: return true; // Style always has defaults
+      case 8: return storyTitle.trim().length > 0;
       default: return false;
     }
   }
@@ -585,6 +602,23 @@ import {
     // Prepare story data
     const storyData = scenarioService.prepareStoryData(wizardData, processedOpening);
 
+    // Add portraits and visual descriptors to protagonist
+    if (storyData.protagonist) {
+      storyData.protagonist.portrait = protagonistPortrait ?? undefined;
+      storyData.protagonist.visualDescriptors = protagonistVisualDescriptors
+        ? protagonistVisualDescriptors.split(',').map(d => d.trim()).filter(Boolean)
+        : [];
+    }
+
+    // Add portraits and visual descriptors to supporting characters (keyed by name)
+    storyData.characters = storyData.characters.map((char) => ({
+      ...char,
+      portrait: supportingCharacterPortraits[char.name] ?? undefined,
+      visualDescriptors: supportingCharacterVisualDescriptors[char.name]
+        ? supportingCharacterVisualDescriptors[char.name].split(',').map(d => d.trim()).filter(Boolean)
+        : [],
+    }));
+
     // Create the story using the store, including any imported entries
     const newStory = await story.createStoryFromWizard({
       ...storyData,
@@ -604,9 +638,261 @@ import {
     'Select a Genre',
     'Describe Your Setting',
     'Create Your Character',
+    'Character Portraits (Optional)',
     'Writing Style',
     'Generate Opening',
   ];
+
+  // Portrait generation functions
+  async function generateProtagonistPortrait() {
+    if (!protagonist || isGeneratingProtagonistPortrait) return;
+
+    const imageSettings = settings.systemServicesSettings.imageGeneration;
+    if (!imageSettings.nanoGptApiKey) {
+      portraitError = 'NanoGPT API key required for portrait generation';
+      return;
+    }
+
+    const descriptors = protagonistVisualDescriptors.trim();
+    if (!descriptors) {
+      portraitError = 'Add appearance descriptors first';
+      return;
+    }
+
+    isGeneratingProtagonistPortrait = true;
+    portraitError = null;
+
+    try {
+      // Get style prompt
+      const styleId = imageSettings.styleId;
+      let stylePrompt = '';
+      try {
+        const promptContext = {
+          mode: 'adventure' as const,
+          pov: 'second' as const,
+          tense: 'present' as const,
+          protagonistName: '',
+        };
+        stylePrompt = promptService.getPrompt(styleId, promptContext) || '';
+      } catch {
+        stylePrompt = 'Soft cel-shaded anime illustration. Muted pastel color palette. Dreamy, airy atmosphere.';
+      }
+
+      // Build portrait prompt
+      const promptContext = {
+        mode: 'adventure' as const,
+        pov: 'second' as const,
+        tense: 'present' as const,
+        protagonistName: '',
+      };
+
+      const portraitPrompt = promptService.renderPrompt('image-portrait-generation', promptContext, {
+        imageStylePrompt: stylePrompt,
+        visualDescriptors: descriptors,
+        characterName: protagonist.name,
+      });
+
+      // Generate
+      const provider = new NanoGPTImageProvider(imageSettings.nanoGptApiKey);
+      const response = await provider.generateImage({
+        prompt: portraitPrompt,
+        model: imageSettings.portraitModel || 'z-image-turbo',
+        size: '1024x1024',
+        response_format: 'b64_json',
+      });
+
+      if (response.images.length === 0 || !response.images[0].b64_json) {
+        throw new Error('No image data returned');
+      }
+
+      protagonistPortrait = `data:image/png;base64,${response.images[0].b64_json}`;
+    } catch (error) {
+      portraitError = error instanceof Error ? error.message : 'Failed to generate portrait';
+    } finally {
+      isGeneratingProtagonistPortrait = false;
+    }
+  }
+
+  async function generateSupportingCharacterPortrait(charName: string) {
+    const char = supportingCharacters.find(c => c.name === charName);
+    if (!char || generatingPortraitName !== null) return;
+
+    const imageSettings = settings.systemServicesSettings.imageGeneration;
+    if (!imageSettings.nanoGptApiKey) {
+      portraitError = 'NanoGPT API key required for portrait generation';
+      return;
+    }
+
+    const descriptors = (supportingCharacterVisualDescriptors[charName] || '').trim();
+    if (!descriptors) {
+      portraitError = `Add appearance descriptors for ${char.name} first`;
+      return;
+    }
+
+    generatingPortraitName = charName;
+    portraitError = null;
+
+    try {
+      // Get style prompt
+      const styleId = imageSettings.styleId;
+      let stylePrompt = '';
+      try {
+        const promptContext = {
+          mode: 'adventure' as const,
+          pov: 'second' as const,
+          tense: 'present' as const,
+          protagonistName: '',
+        };
+        stylePrompt = promptService.getPrompt(styleId, promptContext) || '';
+      } catch {
+        stylePrompt = 'Soft cel-shaded anime illustration. Muted pastel color palette. Dreamy, airy atmosphere.';
+      }
+
+      // Build portrait prompt
+      const promptContext = {
+        mode: 'adventure' as const,
+        pov: 'second' as const,
+        tense: 'present' as const,
+        protagonistName: '',
+      };
+
+      const portraitPrompt = promptService.renderPrompt('image-portrait-generation', promptContext, {
+        imageStylePrompt: stylePrompt,
+        visualDescriptors: descriptors,
+        characterName: char.name,
+      });
+
+      // Generate
+      const provider = new NanoGPTImageProvider(imageSettings.nanoGptApiKey);
+      const response = await provider.generateImage({
+        prompt: portraitPrompt,
+        model: imageSettings.portraitModel || 'z-image-turbo',
+        size: '1024x1024',
+        response_format: 'b64_json',
+      });
+
+      if (response.images.length === 0 || !response.images[0].b64_json) {
+        throw new Error('No image data returned');
+      }
+
+      supportingCharacterPortraits[charName] = `data:image/png;base64,${response.images[0].b64_json}`;
+      supportingCharacterPortraits = { ...supportingCharacterPortraits }; // Trigger reactivity
+    } catch (error) {
+      portraitError = error instanceof Error ? error.message : 'Failed to generate portrait';
+    } finally {
+      generatingPortraitName = null;
+    }
+  }
+
+  function removeProtagonistPortrait() {
+    protagonistPortrait = null;
+    portraitError = null;
+  }
+
+  function removeSupportingCharacterPortrait(charName: string) {
+    supportingCharacterPortraits[charName] = null;
+    supportingCharacterPortraits = { ...supportingCharacterPortraits };
+    portraitError = null;
+  }
+
+  // Portrait upload handlers
+  let isUploadingProtagonistPortrait = $state(false);
+  let uploadingCharacterName = $state<string | null>(null);
+
+  async function handleProtagonistPortraitUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    isUploadingProtagonistPortrait = true;
+    portraitError = null;
+
+    try {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select an image file');
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('Image must be smaller than 5MB');
+      }
+
+      // Convert to base64
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== 'string' || !result.startsWith('data:image/')) {
+            reject(new Error('Failed to read image data'));
+            return;
+          }
+          resolve(result);
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+
+      protagonistPortrait = dataUrl;
+    } catch (error) {
+      portraitError = error instanceof Error ? error.message : 'Failed to upload portrait';
+    } finally {
+      isUploadingProtagonistPortrait = false;
+      // Reset input
+      input.value = '';
+    }
+  }
+
+  async function handleSupportingCharacterPortraitUpload(event: Event, charName: string) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    uploadingCharacterName = charName;
+    portraitError = null;
+
+    try {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select an image file');
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('Image must be smaller than 5MB');
+      }
+
+      // Convert to base64
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== 'string' || !result.startsWith('data:image/')) {
+            reject(new Error('Failed to read image data'));
+            return;
+          }
+          resolve(result);
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+
+      supportingCharacterPortraits[charName] = dataUrl;
+      supportingCharacterPortraits = { ...supportingCharacterPortraits }; // Trigger reactivity
+    } catch (error) {
+      portraitError = error instanceof Error ? error.message : 'Failed to upload portrait';
+    } finally {
+      uploadingCharacterName = null;
+      // Reset input
+      input.value = '';
+    }
+  }
+
+  // Check if image generation is enabled
+  const imageGenerationEnabled = $derived(
+    settings.systemServicesSettings.imageGeneration.enabled &&
+    !!settings.systemServicesSettings.imageGeneration.nanoGptApiKey
+  );
 
   // Lorebook import functions
   async function handleFileSelect(event: Event) {
@@ -1593,7 +1879,218 @@ function clearImport() {
         </div>
 
       {:else if currentStep === 6}
-        <!-- Step 6: Writing Style -->
+        <!-- Step 6: Character Portraits -->
+        <div class="space-y-4">
+          <p class="text-surface-400">
+            Upload or generate portrait images for your characters. In portrait mode, only characters with portraits can appear in story images.
+          </p>
+
+          {#if !imageGenerationEnabled}
+            <div class="card bg-amber-500/10 border-amber-500/30 p-4">
+              <p class="text-sm text-amber-400">
+                Image generation is not configured. You can still upload portraits manually, or enable generation in Settings &gt; Image Generation.
+              </p>
+            </div>
+          {/if}
+
+          {#if portraitError}
+              <div class="card bg-red-500/10 border-red-500/30 p-3">
+                <p class="text-sm text-red-400">{portraitError}</p>
+              </div>
+            {/if}
+
+            <!-- Protagonist Portrait -->
+            {#if protagonist}
+              <div class="card bg-surface-900 p-4 space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="font-medium text-surface-100">{protagonist.name}</h3>
+                  <span class="text-xs px-2 py-0.5 rounded bg-primary-500/20 text-primary-400">Protagonist</span>
+                </div>
+
+                <div class="flex gap-4">
+                  <!-- Portrait Preview -->
+                  <div class="shrink-0">
+                    {#if protagonistPortrait}
+                      <div class="relative">
+                        <img
+                          src={normalizeImageDataUrl(protagonistPortrait) ?? ''}
+                          alt="{protagonist.name} portrait"
+                          class="w-24 h-24 rounded-lg object-cover ring-1 ring-surface-600"
+                        />
+                        <button
+                          class="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                          onclick={removeProtagonistPortrait}
+                          title="Remove portrait"
+                        >
+                          <X class="h-3 w-3" />
+                        </button>
+                      </div>
+                    {:else}
+                      <div class="w-24 h-24 rounded-lg border-2 border-dashed border-surface-600 bg-surface-800 flex items-center justify-center">
+                        <User class="h-8 w-8 text-surface-600" />
+                      </div>
+                    {/if}
+                  </div>
+
+                  <!-- Appearance Input & Generate/Upload Buttons -->
+                  <div class="flex-1 space-y-2">
+                    <div>
+                      <label class="mb-1 block text-xs font-medium text-surface-400">Appearance (comma-separated)</label>
+                      <textarea
+                        bind:value={protagonistVisualDescriptors}
+                        placeholder="e.g., long silver hair, violet eyes, fair skin, elegant dark blue coat..."
+                        class="input text-sm min-h-[60px] resize-none"
+                        rows="2"
+                      ></textarea>
+                    </div>
+                    <div class="flex gap-2">
+                      <label class="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer">
+                        {#if isUploadingProtagonistPortrait}
+                          <Loader2 class="h-3 w-3 animate-spin" />
+                          Uploading...
+                        {:else}
+                          <ImageUp class="h-3 w-3" />
+                          Upload
+                        {/if}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          class="hidden"
+                          onchange={handleProtagonistPortraitUpload}
+                          disabled={isUploadingProtagonistPortrait || isGeneratingProtagonistPortrait}
+                        />
+                      </label>
+                      {#if imageGenerationEnabled}
+                        <button
+                          class="btn btn-secondary btn-sm flex items-center gap-1"
+                          onclick={generateProtagonistPortrait}
+                          disabled={isGeneratingProtagonistPortrait || isUploadingProtagonistPortrait || !protagonistVisualDescriptors.trim()}
+                          title={!protagonistVisualDescriptors.trim() ? 'Add appearance descriptors to generate' : ''}
+                        >
+                          {#if isGeneratingProtagonistPortrait}
+                            <Loader2 class="h-3 w-3 animate-spin" />
+                            Generating...
+                          {:else}
+                            <Wand2 class="h-3 w-3" />
+                            {protagonistPortrait ? 'Regenerate' : 'Generate'}
+                          {/if}
+                        </button>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {:else}
+              <div class="card bg-surface-900 border-dashed border-2 border-surface-600 p-4 text-center">
+                <p class="text-surface-400 text-sm">No protagonist created. Go back to step 5 to create one.</p>
+              </div>
+            {/if}
+
+            <!-- Supporting Character Portraits -->
+            {#if supportingCharacters.length > 0}
+              <div class="space-y-3">
+                <h4 class="text-sm font-medium text-surface-300">Supporting Characters</h4>
+                {#each supportingCharacters as char, index}
+                  <div class="card bg-surface-900 p-4 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <h3 class="font-medium text-surface-100">{char.name}</h3>
+                      <span class="text-xs px-2 py-0.5 rounded bg-accent-500/20 text-accent-400">{char.role}</span>
+                    </div>
+
+                    <div class="flex gap-4">
+                      <!-- Portrait Preview -->
+                      <div class="shrink-0">
+                        {#if supportingCharacterPortraits[char.name]}
+                          <div class="relative">
+                            <img
+                              src={normalizeImageDataUrl(supportingCharacterPortraits[char.name]) ?? ''}
+                              alt="{char.name} portrait"
+                              class="w-24 h-24 rounded-lg object-cover ring-1 ring-surface-600"
+                            />
+                            <button
+                              class="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                              onclick={() => removeSupportingCharacterPortrait(char.name)}
+                              title="Remove portrait"
+                            >
+                              <X class="h-3 w-3" />
+                            </button>
+                          </div>
+                        {:else}
+                          <div class="w-24 h-24 rounded-lg border-2 border-dashed border-surface-600 bg-surface-800 flex items-center justify-center">
+                            <User class="h-8 w-8 text-surface-600" />
+                          </div>
+                        {/if}
+                      </div>
+
+                      <!-- Appearance Input & Generate/Upload Buttons -->
+                      <div class="flex-1 space-y-2">
+                        <div>
+                          <label class="mb-1 block text-xs font-medium text-surface-400">Appearance (comma-separated)</label>
+                          <textarea
+                            value={supportingCharacterVisualDescriptors[char.name] || ''}
+                            oninput={(e) => {
+                              supportingCharacterVisualDescriptors[char.name] = e.currentTarget.value;
+                              supportingCharacterVisualDescriptors = { ...supportingCharacterVisualDescriptors };
+                            }}
+                            placeholder="e.g., short dark hair, green eyes, athletic build..."
+                            class="input text-sm min-h-[60px] resize-none"
+                            rows="2"
+                          ></textarea>
+                        </div>
+                        <div class="flex gap-2">
+                          <label class="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer">
+                            {#if uploadingCharacterName === char.name}
+                              <Loader2 class="h-3 w-3 animate-spin" />
+                              Uploading...
+                            {:else}
+                              <ImageUp class="h-3 w-3" />
+                              Upload
+                            {/if}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              class="hidden"
+                              onchange={(e) => handleSupportingCharacterPortraitUpload(e, char.name)}
+                              disabled={uploadingCharacterName !== null || generatingPortraitName !== null}
+                            />
+                          </label>
+                          {#if imageGenerationEnabled}
+                            <button
+                              class="btn btn-secondary btn-sm flex items-center gap-1"
+                              onclick={() => generateSupportingCharacterPortrait(char.name)}
+                              disabled={generatingPortraitName !== null || uploadingCharacterName !== null || !(supportingCharacterVisualDescriptors[char.name] || '').trim()}
+                              title={!(supportingCharacterVisualDescriptors[char.name] || '').trim() ? 'Add appearance descriptors to generate' : ''}
+                            >
+                              {#if generatingPortraitName === char.name}
+                                <Loader2 class="h-3 w-3 animate-spin" />
+                                Generating...
+                              {:else}
+                                <Wand2 class="h-3 w-3" />
+                                {supportingCharacterPortraits[char.name] ? 'Regenerate' : 'Generate'}
+                              {/if}
+                            </button>
+                          {/if}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
+          {#if !protagonist && supportingCharacters.length === 0}
+            <div class="card bg-surface-900 border-dashed border-2 border-surface-600 p-6 text-center">
+              <p class="text-surface-400">No characters created yet. Go back to step 5 to create characters.</p>
+            </div>
+          {/if}
+
+          <p class="text-xs text-surface-500 text-center">
+            Portraits are optional. You can skip this step and add portraits later from the Characters panel.
+          </p>
+        </div>
+
+      {:else if currentStep === 7}
+        <!-- Step 7: Writing Style -->
         <div class="space-y-6">
           <p class="text-surface-400">Customize how your story will be written.</p>
 
@@ -1660,8 +2157,8 @@ function clearImport() {
           </div>
         </div>
 
-      {:else if currentStep === 7}
-        <!-- Step 7: Generate Opening -->
+      {:else if currentStep === 8}
+        <!-- Step 8: Generate Opening -->
         <div class="space-y-4">
           <p class="text-surface-400">
             Give your story a title and generate the opening scene.

@@ -23,6 +23,10 @@ export interface ImageableScene {
   sceneType: 'action' | 'item' | 'character' | 'environment';
   /** Priority 1-10, higher = more important */
   priority: number;
+  /** Character name if this scene depicts a specific character with a portrait, or null */
+  character: string | null;
+  /** If true, generate a portrait for this character (portrait mode only) */
+  generatePortrait: boolean;
 }
 
 /**
@@ -48,6 +52,10 @@ export interface ImagePromptContext {
   chatHistory?: string;
   /** Activated lorebook entries for world context */
   lorebookContext?: string;
+  /** Names of characters that have portrait images available */
+  charactersWithPortraits: string[];
+  /** Whether to use portrait reference mode (simplified prompts for characters with portraits) */
+  portraitMode: boolean;
 }
 
 /**
@@ -92,11 +100,19 @@ export class ImagePromptService {
    */
   async identifyScenes(context: ImagePromptContext): Promise<ImageableScene[]> {
     if (this.debug) {
-      console.log('[ImagePrompt] Analyzing narrative for imageable scenes');
+      console.log('[ImagePrompt] Analyzing narrative for imageable scenes', {
+        portraitMode: context.portraitMode,
+        charactersWithPortraits: context.charactersWithPortraits,
+      });
     }
 
     // Build character descriptors string
     const characterDescriptors = this.buildCharacterDescriptors(context.presentCharacters);
+
+    // Build list of characters with portraits for the prompt
+    const charactersWithPortraitsStr = context.charactersWithPortraits.length > 0
+      ? context.charactersWithPortraits.join(', ')
+      : 'None';
 
     const promptContext = {
       mode: 'adventure' as const,
@@ -105,15 +121,21 @@ export class ImagePromptService {
       protagonistName: '',
     };
 
+    // Select template based on portrait mode
+    const templateId = context.portraitMode
+      ? 'image-prompt-analysis-reference'
+      : 'image-prompt-analysis';
+
     // Build the system prompt with style and character info
-    const systemPrompt = promptService.renderPrompt('image-prompt-analysis', promptContext, {
+    const systemPrompt = promptService.renderPrompt(templateId, promptContext, {
       imageStylePrompt: context.stylePrompt,
       characterDescriptors: characterDescriptors || 'No character visual descriptors available.',
+      charactersWithPortraits: charactersWithPortraitsStr,
       maxImages: context.maxImages === 0 ? '0 (unlimited)' : String(context.maxImages),
     });
 
     // Build the user prompt with full context
-    const userPrompt = promptService.renderUserPrompt('image-prompt-analysis', promptContext, {
+    const userPrompt = promptService.renderUserPrompt(templateId, promptContext, {
       narrativeResponse: context.narrativeResponse,
       userAction: context.userAction,
       chatHistory: context.chatHistory || '',
@@ -203,6 +225,8 @@ export class ImagePromptService {
           sourceText: String(item.sourceText),
           sceneType: this.normalizeSceneType(item.sceneType),
           priority: Math.min(10, Math.max(1, Number(item.priority) || 5)),
+          character: this.normalizeCharacter(item.character),
+          generatePortrait: Boolean(item.generatePortrait),
         }));
     } catch (error) {
       if (this.debug) {
@@ -210,6 +234,20 @@ export class ImagePromptService {
       }
       return [];
     }
+  }
+
+  /**
+   * Normalize character field - returns character name or null.
+   */
+  private normalizeCharacter(character: unknown): string | null {
+    if (!character || typeof character !== 'string') {
+      return null;
+    }
+    const normalized = character.trim().toLowerCase();
+    if (normalized === 'none' || normalized === '' || normalized === 'null') {
+      return null;
+    }
+    return character.trim(); // Return original casing
   }
 
   /**

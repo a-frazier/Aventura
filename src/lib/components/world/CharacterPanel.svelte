@@ -1,7 +1,11 @@
 <script lang="ts">
   import { story } from '$lib/stores/story.svelte';
-  import { Plus, User, Skull, UserX, Pencil, Trash2, Star } from 'lucide-svelte';
+  import { settings } from '$lib/stores/settings.svelte';
+  import { Plus, User, Skull, UserX, Pencil, Trash2, Star, ImageUp, Wand2, X, Loader2 } from 'lucide-svelte';
   import type { Character } from '$lib/types';
+  import { NanoGPTImageProvider } from '$lib/services/ai/nanoGPTImageProvider';
+  import { promptService } from '$lib/services/prompts';
+  import { normalizeImageDataUrl } from '$lib/utils/image';
 
   let showAddForm = $state(false);
   let newName = $state('');
@@ -18,6 +22,13 @@
   let pendingProtagonistId = $state<string | null>(null);
   let previousRelationshipLabel = $state('');
   let swapError = $state<string | null>(null);
+
+  // Portrait state
+  let uploadingPortraitId = $state<string | null>(null);
+  let generatingPortraitId = $state<string | null>(null);
+  let portraitError = $state<string | null>(null);
+  let editPortrait = $state<string | null>(null);
+  let expandedPortrait = $state<{ src: string; name: string } | null>(null);
   const currentProtagonistName = $derived.by(() => (
     story.characters.find(c => c.relationship === 'self')?.name ?? 'current'
   ));
@@ -39,6 +50,8 @@
     editStatus = character.status;
     editTraits = character.traits.join(', ');
     editVisualDescriptors = (character.visualDescriptors ?? []).join(', ');
+    editPortrait = character.portrait;
+    portraitError = null;
   }
 
   function cancelEdit() {
@@ -49,6 +62,8 @@
     editTraits = '';
     editVisualDescriptors = '';
     editStatus = 'active';
+    editPortrait = null;
+    portraitError = null;
   }
 
   async function saveEdit(character: Character) {
@@ -72,6 +87,7 @@
       status: editStatus,
       traits,
       visualDescriptors,
+      portrait: editPortrait,
     });
 
     cancelEdit();
@@ -125,6 +141,133 @@
       case 'deceased': return 'text-red-400';
       default: return 'text-surface-400';
     }
+  }
+
+  // Portrait handling functions
+  async function handlePortraitUpload(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !editingId) return;
+
+    uploadingPortraitId = editingId;
+    portraitError = null;
+
+    try {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please select an image file');
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('Image must be smaller than 5MB');
+      }
+
+      // Convert to base64
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== 'string' || !result.startsWith('data:image/')) {
+            reject(new Error('Failed to read image data'));
+            return;
+          }
+          resolve(result);
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+
+      editPortrait = dataUrl;
+    } catch (error) {
+      portraitError = error instanceof Error ? error.message : 'Failed to upload portrait';
+    } finally {
+      uploadingPortraitId = null;
+      // Reset input
+      input.value = '';
+    }
+  }
+
+  async function generatePortrait(character: Character) {
+    const imageSettings = settings.systemServicesSettings.imageGeneration;
+
+    // Validate requirements
+    if (!imageSettings.nanoGptApiKey) {
+      portraitError = 'NanoGPT API key required for portrait generation';
+      return;
+    }
+
+    // Get visual descriptors from current edit state or character
+    const descriptors = editVisualDescriptors
+      .split(',')
+      .map(d => d.trim())
+      .filter(Boolean);
+
+    if (descriptors.length === 0) {
+      portraitError = 'Add appearance descriptors first';
+      return;
+    }
+
+    generatingPortraitId = character.id;
+    portraitError = null;
+
+    try {
+      // Get the style prompt
+      const styleId = imageSettings.styleId;
+      let stylePrompt = '';
+      try {
+        const promptContext = {
+          mode: 'adventure' as const,
+          pov: 'second' as const,
+          tense: 'present' as const,
+          protagonistName: '',
+        };
+        stylePrompt = promptService.getPrompt(styleId, promptContext) || '';
+      } catch {
+        // Use default style
+        stylePrompt = 'Soft cel-shaded anime illustration. Muted pastel color palette with low saturation. Dreamy, airy atmosphere.';
+      }
+
+      // Build the portrait generation prompt using the template
+      const promptContext = {
+        mode: 'adventure' as const,
+        pov: 'second' as const,
+        tense: 'present' as const,
+        protagonistName: '',
+      };
+
+      const portraitPrompt = promptService.renderPrompt('image-portrait-generation', promptContext, {
+        imageStylePrompt: stylePrompt,
+        visualDescriptors: descriptors.join(', '),
+        characterName: editName || character.name,
+      });
+
+      // Create the image provider
+      const provider = new NanoGPTImageProvider(imageSettings.nanoGptApiKey);
+
+      // Generate the image
+      const response = await provider.generateImage({
+        prompt: portraitPrompt,
+        model: imageSettings.portraitModel || 'z-image-turbo',
+        size: '1024x1024',
+        response_format: 'b64_json',
+      });
+
+      if (response.images.length === 0 || !response.images[0].b64_json) {
+        throw new Error('No image data returned');
+      }
+
+      editPortrait = `data:image/png;base64,${response.images[0].b64_json}`;
+    } catch (error) {
+      portraitError = error instanceof Error ? error.message : 'Failed to generate portrait';
+    } finally {
+      generatingPortraitId = null;
+    }
+  }
+
+  function removePortrait() {
+    editPortrait = null;
+    portraitError = null;
   }
 </script>
 
@@ -183,9 +326,22 @@
         <div class="card p-3">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div class="flex min-w-0 items-start gap-2">
-              <div class="rounded-full bg-surface-700 p-1.5 {getStatusColor(character.status)}">
-                <StatusIcon class="h-4 w-4" />
-              </div>
+              {#if character.portrait}
+                <button
+                  class="flex-shrink-0 cursor-pointer"
+                  onclick={() => expandedPortrait = { src: normalizeImageDataUrl(character.portrait) ?? '', name: character.name }}
+                >
+                  <img
+                    src={normalizeImageDataUrl(character.portrait) ?? ''}
+                    alt="{character.name} portrait"
+                    class="h-10 w-10 rounded-lg object-cover ring-1 ring-surface-600 hover:ring-2 hover:ring-accent-500 transition-all"
+                  />
+                </button>
+              {:else}
+                <div class="rounded-full bg-surface-700 p-1.5 {getStatusColor(character.status)}">
+                  <StatusIcon class="h-4 w-4" />
+                </div>
+              {/if}
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="break-words font-medium text-surface-100">{character.name}</span>
@@ -324,6 +480,76 @@
                 class="input text-sm"
                 rows="2"
               ></textarea>
+
+              <!-- Portrait Section -->
+              <div class="rounded-md border border-surface-700/60 bg-surface-800/40 p-3">
+                <div class="mb-2 text-xs font-medium text-surface-400">Portrait</div>
+                <div class="flex items-start gap-3">
+                  {#if editPortrait}
+                    <div class="relative">
+                      <img
+                        src={normalizeImageDataUrl(editPortrait) ?? ''}
+                        alt="Portrait preview"
+                        class="h-20 w-20 rounded-lg object-cover ring-1 ring-surface-600"
+                      />
+                      <button
+                        class="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 sm:-right-1 sm:-top-1 sm:h-5 sm:w-5"
+                        onclick={removePortrait}
+                        title="Remove portrait"
+                      >
+                        <X class="h-4 w-4 sm:h-3 sm:w-3" />
+                      </button>
+                    </div>
+                  {:else}
+                    <div class="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed border-surface-600 bg-surface-800">
+                      <User class="h-8 w-8 text-surface-600" />
+                    </div>
+                  {/if}
+                  <div class="flex flex-1 flex-col gap-2">
+                    <label class="btn btn-secondary text-xs min-h-[44px] sm:min-h-0 cursor-pointer">
+                      {#if uploadingPortraitId === character.id}
+                        <Loader2 class="h-4 w-4 sm:h-3 sm:w-3 animate-spin" />
+                        Uploading...
+                      {:else}
+                        <ImageUp class="h-4 w-4 sm:h-3 sm:w-3" />
+                        Upload
+                      {/if}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="hidden"
+                        onchange={handlePortraitUpload}
+                        disabled={uploadingPortraitId !== null || generatingPortraitId !== null}
+                      />
+                    </label>
+                    <button
+                      class="btn btn-secondary text-xs min-h-[44px] sm:min-h-0"
+                      onclick={() => generatePortrait(character)}
+                      disabled={generatingPortraitId !== null || uploadingPortraitId !== null || !editVisualDescriptors.trim()}
+                      title={!editVisualDescriptors.trim() ? 'Add appearance descriptors first' : 'Generate portrait from appearance'}
+                    >
+                      {#if generatingPortraitId === character.id}
+                        <Loader2 class="h-4 w-4 sm:h-3 sm:w-3 animate-spin" />
+                        Generating...
+                      {:else}
+                        <Wand2 class="h-4 w-4 sm:h-3 sm:w-3" />
+                        Generate
+                      {/if}
+                    </button>
+                    <p class="text-xs text-surface-500">
+                      {#if editPortrait}
+                        Portrait will be used as reference for image generation
+                      {:else}
+                        Upload or generate a portrait from appearance
+                      {/if}
+                    </p>
+                  </div>
+                </div>
+                {#if portraitError}
+                  <p class="mt-2 text-xs text-red-400">{portraitError}</p>
+                {/if}
+              </div>
+
               <div class="flex justify-end gap-2">
                 <button class="btn btn-secondary text-xs" onclick={cancelEdit}>
                   Cancel
@@ -343,3 +569,29 @@
     </div>
   {/if}
 </div>
+
+<!-- Expanded Portrait Modal -->
+{#if expandedPortrait}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 cursor-pointer"
+    onclick={() => expandedPortrait = null}
+    onkeydown={(e) => e.key === 'Escape' && (expandedPortrait = null)}
+    role="dialog"
+    aria-label="Expanded portrait"
+  >
+    <div class="relative max-h-[80vh] max-w-[80vw]">
+      <img
+        src={expandedPortrait.src}
+        alt="{expandedPortrait.name} portrait"
+        class="max-h-[80vh] max-w-[80vw] rounded-lg object-contain"
+      />
+      <button
+        class="absolute -right-3 -top-3 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-surface-700 text-surface-300 hover:bg-surface-600 hover:text-white sm:-right-2 sm:-top-2 sm:min-h-0 sm:min-w-0 sm:p-1.5"
+        onclick={(e) => { e.stopPropagation(); expandedPortrait = null; }}
+      >
+        <X class="h-5 w-5 sm:h-4 sm:w-4" />
+      </button>
+    </div>
+  </div>
+{/if}

@@ -325,8 +325,8 @@ class DatabaseService {
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, status, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -335,6 +335,7 @@ class DatabaseService {
         character.relationship,
         JSON.stringify(character.traits),
         JSON.stringify(character.visualDescriptors || []),
+        character.portrait || null,
         character.status,
         character.metadata ? JSON.stringify(character.metadata) : null,
       ]
@@ -351,6 +352,7 @@ class DatabaseService {
     if (updates.relationship !== undefined) { setClauses.push('relationship = ?'); values.push(updates.relationship); }
     if (updates.traits !== undefined) { setClauses.push('traits = ?'); values.push(JSON.stringify(updates.traits)); }
     if (updates.visualDescriptors !== undefined) { setClauses.push('visual_descriptors = ?'); values.push(JSON.stringify(updates.visualDescriptors)); }
+    if (updates.portrait !== undefined) { setClauses.push('portrait = ?'); values.push(updates.portrait); }
     if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
 
@@ -1113,6 +1115,7 @@ class DatabaseService {
       relationship: row.relationship,
       traits: row.traits ? JSON.parse(row.traits) : [],
       visualDescriptors: row.visual_descriptors ? JSON.parse(row.visual_descriptors) : [],
+      portrait: row.portrait || null,
       status: row.status,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
     };

@@ -862,6 +862,11 @@ export interface ImageGenerationServiceSettings {
   maxImagesPerMessage: number;    // Max images per narrative (0 = unlimited, default: 3)
   autoGenerate: boolean;          // Generate automatically after narration
 
+  // Portrait mode settings (character reference images)
+  portraitMode: boolean;          // Enable portrait reference mode (default: false)
+  portraitModel: string;          // Model for generating character portraits (default: 'z-image-turbo')
+  referenceModel: string;         // Model for image generation with reference (default: 'qwen-image')
+
   // Scene analysis model settings (for identifying imageable scenes)
   promptProfileId: string | null; // API profile for scene analysis
   promptModel: string;            // Model for scene analysis (empty = use profile default)
@@ -881,6 +886,9 @@ export function getDefaultImageGenerationSettings(): ImageGenerationServiceSetti
     size: '1024x1024',
     maxImagesPerMessage: 3,
     autoGenerate: true,
+    portraitMode: false,
+    portraitModel: 'z-image-turbo',
+    referenceModel: 'qwen-image',
     promptProfileId: DEFAULT_OPENROUTER_PROFILE_ID,
     promptModel: 'deepseek/deepseek-v3.2',
     promptTemperature: 0.3,
@@ -902,6 +910,9 @@ export function getDefaultImageGenerationSettingsForProvider(provider: ProviderP
     size: '1024x1024',
     maxImagesPerMessage: 3,
     autoGenerate: true,
+    portraitMode: false,
+    portraitModel: 'z-image-turbo',
+    referenceModel: 'qwen-image',
     promptProfileId,
     promptModel,
     promptTemperature: 0.3,

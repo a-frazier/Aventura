@@ -40,16 +40,22 @@ export class NanoGPTImageProvider implements ImageProvider {
         size: request.size,
         n: request.n,
         promptLength: request.prompt.length,
+        hasReferenceImages: !!request.imageDataUrls?.length,
       });
     }
 
-    const body = {
+    const body: Record<string, unknown> = {
       prompt: request.prompt,
       model: request.model || FALLBACK_MODEL,
       n: request.n ?? 1,
       size: request.size ?? '1024x1024',
       response_format: request.response_format ?? 'b64_json',
     };
+
+    // Add reference images if provided (for image-to-image generation with qwen-image model)
+    if (request.imageDataUrls && request.imageDataUrls.length > 0) {
+      body.imageDataUrls = request.imageDataUrls;
+    }
 
     try {
       const response = await fetch(NANOGPT_IMAGES_ENDPOINT, {
