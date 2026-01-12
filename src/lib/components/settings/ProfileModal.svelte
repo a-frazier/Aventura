@@ -444,7 +444,7 @@
   .input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    background: var(--surface-2);
+    background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 0.375rem;
     color: var(--text-primary);

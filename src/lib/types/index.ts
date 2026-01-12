@@ -471,7 +471,7 @@ export interface APISettings {
 
 export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high';
 
-export type ThemeId = 'dark' | 'light' | 'light-solarized' | 'retro-console';
+export type ThemeId = 'dark' | 'light' | 'light-solarized' | 'retro-console' | 'fallen-down';
 
 export type FontSource = 'default' | 'system' | 'google';
 

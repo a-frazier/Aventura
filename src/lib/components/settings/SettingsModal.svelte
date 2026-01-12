@@ -960,6 +960,7 @@
               <option value="light">Light (Paper)</option>
               <option value="light-solarized">Light (Solarized)</option>
               <option value="retro-console">Retro Console</option>
+              <option value="fallen-down">Fallen Down</option>
             </select>
             {#if settings.uiSettings.theme === 'retro-console'}
               <p class="mt-1 text-xs text-surface-400">
@@ -972,6 +973,10 @@
             {:else if settings.uiSettings.theme === 'light-solarized'}
               <p class="mt-1 text-xs text-surface-400">
                 Classic Solarized color scheme with cream backgrounds
+              </p>
+            {:else if settings.uiSettings.theme === 'fallen-down'}
+              <p class="mt-1 text-xs text-surface-400">
+                * The shadows deepen. Your adventure continues.
               </p>
             {/if}
           </div>

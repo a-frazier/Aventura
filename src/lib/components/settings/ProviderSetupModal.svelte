@@ -338,7 +338,7 @@
   .input {
     flex: 1;
     padding: 0.625rem 0.875rem;
-    background: var(--surface-2);
+    background-color: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 0.375rem;
     color: var(--text-primary);

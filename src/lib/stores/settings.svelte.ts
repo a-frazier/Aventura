@@ -1837,7 +1837,7 @@ class SettingsStore {
     document.documentElement.setAttribute('data-theme', theme);
 
     // Also maintain legacy 'dark' class for any Tailwind dark: utilities
-    if (theme === 'dark' || theme === 'retro-console') {
+    if (theme === 'dark' || theme === 'retro-console' || theme === 'fallen-down') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');

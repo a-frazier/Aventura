@@ -340,7 +340,7 @@
   .input {
     width: 100%;
     padding: 0.625rem 0.75rem;
-    background: var(--surface-1);
+    background-color: var(--surface-1);
     border: 1px solid var(--border);
     border-radius: 0.375rem;
     color: var(--text-primary);
