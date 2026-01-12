@@ -80,11 +80,10 @@
     if (pendingAction && !ui.isGenerating) {
       log('Processing pending action choice:', pendingAction);
       // Set input value and flag as raw (no prefix/suffix needed)
+      // User can edit the text before manually submitting
       inputValue = pendingAction;
       isRawActionChoice = true;
       ui.clearPendingActionChoice();
-      // handleSubmit now uses tick() to ensure state synchronization
-      handleSubmit();
     }
   });
 

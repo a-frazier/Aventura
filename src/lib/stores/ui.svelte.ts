@@ -705,18 +705,9 @@ class UIStore {
   }
 
   setPendingActionChoice(text: string, storyId?: string) {
+    // Only set the pending choice text - don't clear action choices yet
+    // They will be cleared when the message is actually sent (in handleSubmit)
     this.pendingActionChoice = text;
-    this.actionChoices = [];
-    // Clear persisted choices when one is selected
-    if (storyId) {
-      database.setSetting(this.getActionChoicesKey(storyId), '').catch(err => {
-        console.warn('[UI] Failed to clear persisted action choices:', err);
-      });
-    } else {
-      database.setSetting('action_choices', '').catch(err => {
-        console.warn('[UI] Failed to clear persisted action choices:', err);
-      });
-    }
   }
 
   clearPendingActionChoice() {
