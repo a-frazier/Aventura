@@ -652,6 +652,7 @@ export function convertToEntries(
         createdAt: now,
         updatedAt: now,
         loreManagementBlacklisted: original.loreManagementBlacklisted || false,
+        branchId: null, // Imported entries start on main branch
       };
     }
 
@@ -750,6 +751,7 @@ export function convertToEntries(
       createdAt: now,
       updatedAt: now,
       loreManagementBlacklisted: false,
+      branchId: null, // Imported entries start on main branch
     };
   });
 }

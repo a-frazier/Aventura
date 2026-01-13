@@ -82,6 +82,24 @@ pub fn run() {
             sql: include_str!("../migrations/012_character_portraits.sql"),
             kind: MigrationKind::Up,
         },
+        Migration {
+            version: 13,
+            description: "add_branches",
+            sql: include_str!("../migrations/013_branches.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 14,
+            description: "fix_branch_fk",
+            sql: include_str!("../migrations/014_fix_branch_fk.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 15,
+            description: "branch_world_state",
+            sql: include_str!("../migrations/015_branch_world_state.sql"),
+            kind: MigrationKind::Up,
+        },
     ];
 
     tauri::Builder::default()

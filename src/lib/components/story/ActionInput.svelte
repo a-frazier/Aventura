@@ -275,8 +275,8 @@
       return;
     }
 
-    // Get previous chapters for context
-    const previousChapters = [...story.chapters].sort((a, b) => a.number - b.number);
+    // Get previous chapters for context (branch-filtered)
+    const previousChapters = [...story.currentBranchChapters].sort((a, b) => a.number - b.number);
 
     // Generate chapter summary with previous chapters as context
     const summary = await aiService.summarizeChapter(chapterEntries, previousChapters, story.currentStory?.mode ?? 'adventure', story.pov, story.tense);
@@ -306,6 +306,7 @@
       locations: summary.locations,
       plotThreads: summary.plotThreads,
       emotionalTone: summary.emotionalTone,
+      branchId: story.currentStory.currentBranchId,
       createdAt: Date.now(),
     };
 
@@ -338,9 +339,10 @@
     try {
       const result = await aiService.runLoreManagement(
         story.currentStory.id,
+        story.currentStory.currentBranchId,
         [...story.lorebookEntries], // Clone to avoid mutation issues
         [], // Lore management runs without current chat history
-        story.chapters,
+        story.currentBranchChapters, // Use branch-filtered chapters
         {
           onCreateEntry: async (entry) => {
             await story.addLorebookEntry({
@@ -475,13 +477,14 @@
 
     try {
       // Build world state for AI context (including chapters for summarization)
+      // Use branch-filtered chapters for correct branch awareness
       const worldState = {
         characters: story.characters,
         locations: story.locations,
         items: story.items,
         storyBeats: story.storyBeats,
         currentLocation: story.currentLocation,
-        chapters: story.chapters,
+        chapters: story.currentBranchChapters,
         memoryConfig: story.memoryConfig,
         lorebookEntries: story.lorebookEntries,
       };
@@ -507,7 +510,9 @@
 
       // Task 1: Memory retrieval - get relevant chapter context
       // Use timeline fill (default) or basic retrieval depending on settings
-      if (story.chapters.length > 0 && story.memoryConfig.enableRetrieval) {
+      // Use branch-filtered chapters for correct branch awareness
+      const branchChapters = story.currentBranchChapters;
+      if (branchChapters.length > 0 && story.memoryConfig.enableRetrieval) {
         retrievalTasks.push((async () => {
           try {
             const timelineFillEnabled = settings.systemServicesSettings.timelineFill?.enabled ?? true;
@@ -516,21 +521,21 @@
               return;
             }
 
-            const useAgenticTimelineFill = aiService.shouldUseAgenticRetrieval(story.chapters);
+            const useAgenticTimelineFill = aiService.shouldUseAgenticRetrieval(branchChapters);
 
             if (useAgenticTimelineFill) {
-              log('Starting agentic timeline fill...', { chaptersCount: story.chapters.length });
+              log('Starting agentic timeline fill...', { chaptersCount: branchChapters.length });
 
               const agenticResult = await aiService.runAgenticRetrieval(
                 userActionContent,
                 story.visibleEntries,
-                story.chapters,
+                branchChapters,
                 story.lorebookEntries,
                 (chapterNumber, question) =>
                   aiService.answerChapterQuestion(
                     chapterNumber,
                     question,
-                    story.chapters,
+                    branchChapters,
                     story.entries,
                     activeAbortController?.signal,
                     storyMode
@@ -540,7 +545,7 @@
                     startChapter,
                     endChapter,
                     question,
-                    story.chapters,
+                    branchChapters,
                     story.entries,
                     activeAbortController?.signal,
                     storyMode
@@ -562,13 +567,13 @@
                 log('Agentic timeline fill returned no context');
               }
             } else {
-              log('Starting timeline fill...', { chaptersCount: story.chapters.length });
+              log('Starting timeline fill...', { chaptersCount: branchChapters.length });
 
               // Timeline fill: generates queries and executes them in one go
               const timelineResult = await aiService.runTimelineFill(
                 userActionContent,
                 story.visibleEntries,
-                story.chapters,
+                branchChapters,
                 story.entries, // All entries for querying chapter content
                 activeAbortController?.signal,
                 storyMode,

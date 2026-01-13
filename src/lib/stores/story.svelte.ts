@@ -1,4 +1,4 @@
-import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, Checkpoint, MemoryConfig, StoryMode, StorySettings, Entry, TimeTracker, EmbeddedImage, PersistentCharacterSnapshot } from '$lib/types';
+import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, Checkpoint, Branch, MemoryConfig, StoryMode, StorySettings, Entry, TimeTracker, EmbeddedImage, PersistentCharacterSnapshot } from '$lib/types';
 import { database } from '$lib/services/database';
 import { BUILTIN_TEMPLATES } from '$lib/services/templates';
 import { ui } from './ui.svelte';
@@ -44,6 +44,9 @@ class StoryStore {
   // Memory system
   chapters = $state<Chapter[]>([]);
   checkpoints = $state<Checkpoint[]>([]);
+
+  // Branching system
+  branches = $state<Branch[]>([]);
 
   // Story library
   allStories = $state<Story[]>([]);
@@ -138,8 +141,31 @@ class StoryStore {
     return this.currentStory?.timeTracker || { years: 0, days: 0, hours: 0, minutes: 0 };
   }
 
+  /**
+   * Get chapters filtered by current branch and its lineage.
+   * Includes main branch chapters plus any ancestor/current branch chapters.
+   */
+  get currentBranchChapters(): Chapter[] {
+    const currentBranchId = this.currentStory?.currentBranchId ?? null;
+
+    // If on main branch, only return chapters with null branchId
+    if (currentBranchId === null) {
+      return this.chapters.filter(ch => ch.branchId === null);
+    }
+
+    const lineage = this.buildBranchLineage(currentBranchId);
+    if (lineage.length === 0) {
+      return this.chapters.filter(ch => ch.branchId === null);
+    }
+
+    const lineageIds = new Set(lineage.map(branch => branch.id));
+    return this.chapters.filter(ch => ch.branchId === null || lineageIds.has(ch.branchId));
+  }
+
   get lastChapterEndIndex(): number {
-    if (this.chapters.length === 0) return 0;
+    // Use branch-filtered chapters for this computation
+    const branchChapters = this.currentBranchChapters;
+    if (branchChapters.length === 0) return 0;
 
     // Check if cache is valid - invalidate if chapters or entries changed
     const chaptersChanged = this.chapters.length !== this._lastChaptersLength;
@@ -168,17 +194,20 @@ class StoryStore {
 
   /**
    * Compute lastChapterEndIndex - internal implementation.
+   * Uses branch-filtered chapters for correct branch awareness.
    */
   private _computeLastChapterEndIndex(): number {
-    if (this.chapters.length === 0) return 0;
+    // Use branch-filtered chapters
+    const branchChapters = this.currentBranchChapters;
+    if (branchChapters.length === 0) return 0;
 
     // Rebuild index map if needed
     if (this._entryIdToIndex.size !== this.entries.length) {
       this.rebuildEntryIdIndex();
     }
 
-    // Sort chapters by number to ensure we get the actual last chapter
-    const sortedChapters = [...this.chapters].sort((a, b) => a.number - b.number);
+    // Sort chapters by number to ensure we get the actual last chapter for this branch
+    const sortedChapters = [...branchChapters].sort((a, b) => a.number - b.number);
     const lastChapter = sortedChapters[sortedChapters.length - 1];
 
     // Use O(1) map lookup instead of O(n) find + indexOf
@@ -194,7 +223,7 @@ class StoryStore {
       endEntryId: lastChapter.endEntryId,
     });
 
-    // Sum up all chapter entry counts as a fallback estimate
+    // Sum up all branch chapter entry counts as a fallback estimate
     const totalChapterEntries = sortedChapters.reduce((sum, ch) => sum + ch.entryCount, 0);
     return Math.min(totalChapterEntries, this.entries.length);
   }
@@ -362,26 +391,27 @@ class StoryStore {
 
     this.currentStory = story;
 
-    // Load all related data in parallel
-    const [entries, characters, locations, items, storyBeats, chapters, checkpoints, lorebookEntries] = await Promise.all([
-      database.getStoryEntries(storyId),
+    // Load branch-independent data first
+    const [characters, locations, items, storyBeats, checkpoints, lorebookEntries, branches] = await Promise.all([
       database.getCharacters(storyId),
       database.getLocations(storyId),
       database.getItems(storyId),
       database.getStoryBeats(storyId),
-      database.getChapters(storyId),
       database.getCheckpoints(storyId),
       database.getEntries(storyId),
+      database.getBranches(storyId),
     ]);
 
-    this.entries = entries;
     this.characters = characters;
     this.locations = locations;
     this.items = items;
     this.storyBeats = storyBeats;
-    this.chapters = chapters;
     this.checkpoints = checkpoints;
     this.lorebookEntries = lorebookEntries;
+    this.branches = branches;
+
+    // Load entries and chapters based on current branch
+    await this.reloadEntriesForCurrentBranch();
 
     // Reset all caches after loading
     this.invalidateWordCountCache();
@@ -390,10 +420,12 @@ class StoryStore {
     log('Story loaded', {
       id: storyId,
       mode: story.mode,
-      entries: entries.length,
+      entries: this.entries.length,
       lorebookEntries: lorebookEntries.length,
-      chapters: chapters.length,
+      chapters: this.chapters.length,
       checkpoints: checkpoints.length,
+      branches: branches.length,
+      currentBranchId: story.currentBranchId,
     });
 
     // Load persisted activation data for this story (stickiness tracking)
@@ -449,6 +481,7 @@ class StoryStore {
       retryState: null,
       styleReviewState: null,
       timeTracker: null,
+      currentBranchId: null,
     });
 
     this.allStories = [storyData, ...this.allStories];
@@ -482,6 +515,7 @@ class StoryStore {
       retryState: null,
       styleReviewState: null,
       timeTracker: null,
+      currentBranchId: null,
     });
 
     this.allStories = [storyData, ...this.allStories];
@@ -503,6 +537,7 @@ class StoryStore {
           metadata: null,
           visualDescriptors: [],
           portrait: null,
+          branchId: null, // New stories start on main branch
         };
         await database.addCharacter(protagonist);
       }
@@ -518,6 +553,7 @@ class StoryStore {
           current: true,
           connections: [],
           metadata: null,
+          branchId: null, // New stories start on main branch
         };
         await database.addLocation(location);
       }
@@ -534,6 +570,7 @@ class StoryStore {
             equipped: false,
             location: 'inventory',
             metadata: null,
+            branchId: null, // New stories start on main branch
           };
           await database.addItem(item);
         }
@@ -551,6 +588,7 @@ class StoryStore {
           parentId: null,
           position: 0,
           metadata: { source: 'template', tokenCount, timeStart: { ...baseTime }, timeEnd: { ...baseTime } },
+          branchId: null,
         });
       }
     }
@@ -577,7 +615,7 @@ class StoryStore {
       : { years: 0, days: 0, hours: 0, minutes: 0 };
     const timeEnd = { ...timeStart };
 
-    const position = await database.getNextEntryPosition(this.currentStory.id);
+    const position = await database.getNextEntryPosition(this.currentStory.id, this.currentStory.currentBranchId);
     const entry = await database.addStoryEntry({
       id: crypto.randomUUID(),
       storyId: this.currentStory.id,
@@ -586,6 +624,7 @@ class StoryStore {
       parentId: null,
       position,
       metadata: { ...metadata, tokenCount, timeStart, timeEnd },
+      branchId: this.currentStory.currentBranchId,
     });
 
     this.entries = [...this.entries, entry];
@@ -604,10 +643,23 @@ class StoryStore {
   async updateEntry(entryId: string, content: string): Promise<void> {
     if (!this.currentStory) throw new Error('No story loaded');
 
+    const existingEntry = this.entries.find(e => e.id === entryId);
+    if (!existingEntry) throw new Error('Entry not found');
+
+    // Prevent modifying inherited entries on a branch
+    // An entry is inherited if its branchId doesn't match the current branch
+    const currentBranchId = this.currentStory.currentBranchId;
+    if ((existingEntry.branchId ?? null) !== currentBranchId) {
+      throw new Error(
+        'Cannot edit inherited entries. This entry belongs to ' +
+        (existingEntry.branchId === null ? 'the main branch' : 'a parent branch') +
+        '. Create new content on this branch instead.'
+      );
+    }
+
     // Recalculate token count when content changes
     const tokenCount = countTokens(content);
-    const existingEntry = this.entries.find(e => e.id === entryId);
-    const updatedMetadata = { ...existingEntry?.metadata, tokenCount };
+    const updatedMetadata = { ...existingEntry.metadata, tokenCount };
 
     await database.updateStoryEntry(entryId, { content, metadata: updatedMetadata });
     this.entries = this.entries.map(e =>
@@ -624,6 +676,29 @@ class StoryStore {
   // Delete a story entry
   async deleteEntry(entryId: string): Promise<void> {
     if (!this.currentStory) throw new Error('No story loaded');
+
+    const existingEntry = this.entries.find(e => e.id === entryId);
+    if (!existingEntry) throw new Error('Entry not found');
+
+    // Prevent deleting inherited entries on a branch
+    // An entry is inherited if its branchId doesn't match the current branch
+    const currentBranchId = this.currentStory.currentBranchId;
+    if ((existingEntry.branchId ?? null) !== currentBranchId) {
+      throw new Error(
+        'Cannot delete inherited entries. This entry belongs to ' +
+        (existingEntry.branchId === null ? 'the main branch' : 'a parent branch') +
+        '. You can only delete entries created on the current branch.'
+      );
+    }
+
+    // Check if this entry is a fork point for any branch
+    const branchUsingEntry = this.branches.find(b => b.forkEntryId === entryId);
+    if (branchUsingEntry) {
+      throw new Error(
+        `Cannot delete this entry because it is the fork point for branch "${branchUsingEntry.name}". ` +
+        `Delete the branch first if you want to remove this entry.`
+      );
+    }
 
     await database.deleteStoryEntry(entryId);
     this.entries = this.entries.filter(e => e.id !== entryId);
@@ -813,6 +888,7 @@ class StoryStore {
       metadata: null,
       visualDescriptors: [],
       portrait: null,
+      branchId: this.currentStory.currentBranchId,
     };
 
     await database.addCharacter(character);
@@ -869,6 +945,7 @@ class StoryStore {
       current: makeCurrent,
       connections: [],
       metadata: null,
+      branchId: this.currentStory.currentBranchId,
     };
 
     await database.addLocation(location);
@@ -956,6 +1033,7 @@ class StoryStore {
       equipped: false,
       location: 'inventory',
       metadata: null,
+      branchId: this.currentStory.currentBranchId,
     };
 
     await database.addItem(item);
@@ -1001,6 +1079,7 @@ class StoryStore {
       triggeredAt: null,
       resolvedAt: null,
       metadata: null,
+      branchId: this.currentStory.currentBranchId,
     };
 
     await database.addStoryBeat(beat);
@@ -1094,8 +1173,9 @@ class StoryStore {
 
   /**
    * Add a new lorebook entry.
+   * @param entryData - Entry data. branchId is optional and defaults to current branch.
    */
-  async addLorebookEntry(entryData: Omit<Entry, 'id' | 'storyId' | 'createdAt' | 'updatedAt'>): Promise<Entry> {
+  async addLorebookEntry(entryData: Omit<Entry, 'id' | 'storyId' | 'createdAt' | 'updatedAt' | 'branchId'> & { branchId?: string | null }): Promise<Entry> {
     if (!this.currentStory) throw new Error('No story loaded');
 
     const now = Date.now();
@@ -1105,6 +1185,8 @@ class StoryStore {
       storyId: this.currentStory.id,
       createdAt: now,
       updatedAt: now,
+      // Use provided branchId or default to current branch
+      branchId: entryData.branchId ?? this.currentStory.currentBranchId,
     };
 
     await database.addEntry(entry);
@@ -1341,6 +1423,7 @@ class StoryStore {
           status: 'active',
           metadata: { source: 'classifier' },
           portrait: null,
+          branchId: this.currentStory?.currentBranchId ?? null,
         };
         await database.addCharacter(character);
         this.characters = [...this.characters, character];
@@ -1370,6 +1453,7 @@ class StoryStore {
           current: newLoc.current,
           connections: [],
           metadata: { source: 'classifier' },
+          branchId: this.currentStory?.currentBranchId ?? null,
         };
         await database.addLocation(location);
         this.locations = [...this.locations, location];
@@ -1409,6 +1493,7 @@ class StoryStore {
           equipped: false,
           location: newItem.location || 'inventory',
           metadata: { source: 'classifier' },
+          branchId: this.currentStory?.currentBranchId ?? null,
         };
         await database.addItem(item);
         this.items = [...this.items, item];
@@ -1431,6 +1516,7 @@ class StoryStore {
           status: newBeat.status,
           triggeredAt: Date.now(),
           metadata: { source: 'classifier' },
+          branchId: this.currentStory?.currentBranchId ?? null,
         };
         await database.addStoryBeat(beat);
         this.storyBeats = [...this.storyBeats, beat];
@@ -1533,7 +1619,16 @@ class StoryStore {
   // Get the next chapter number from the database (handles deletions correctly)
   async getNextChapterNumber(): Promise<number> {
     if (!this.currentStory) throw new Error('No story loaded');
-    return await database.getNextChapterNumber(this.currentStory.id);
+
+    // Use branch-filtered chapters to determine next chapter number
+    // this.chapters is already filtered to current branch view (inherited + branch-specific)
+    if (this.chapters.length === 0) {
+      return 1;
+    }
+
+    // Find the maximum chapter number in the current branch view
+    const maxNumber = Math.max(...this.chapters.map(ch => ch.number));
+    return maxNumber + 1;
   }
 
   // Update a chapter's summary
@@ -1734,8 +1829,8 @@ class StoryStore {
       throw new Error('No entries to create chapter from');
     }
 
-    // Get previous chapters for context
-    const previousChapters = [...this.chapters].sort((a, b) => a.number - b.number);
+    // Get previous chapters for context (branch-filtered)
+    const previousChapters = [...this.currentBranchChapters].sort((a, b) => a.number - b.number);
 
     // Import aiService dynamically to avoid circular dependency
     const { aiService } = await import('$lib/services/ai');
@@ -1769,6 +1864,7 @@ class StoryStore {
       locations: chapterData.locations,
       plotThreads: chapterData.plotThreads,
       emotionalTone: chapterData.emotionalTone,
+      branchId: this.currentStory.currentBranchId,
       createdAt: Date.now(),
     };
 
@@ -1797,6 +1893,7 @@ class StoryStore {
       storyBeatsSnapshot: [...this.storyBeats],
       chaptersSnapshot: [...this.chapters],
       timeTrackerSnapshot: this.currentStory.timeTracker ? { ...this.currentStory.timeTracker } : null,
+      lorebookEntriesSnapshot: [...this.lorebookEntries],
       createdAt: Date.now(),
     };
 
@@ -1810,38 +1907,16 @@ class StoryStore {
     return checkpoint;
   }
 
-  // Restore from a checkpoint
-  async restoreCheckpoint(checkpointId: string): Promise<void> {
-    if (!this.currentStory) throw new Error('No story loaded');
-
-    const checkpoint = this.checkpoints.find(cp => cp.id === checkpointId);
-    if (!checkpoint) throw new Error('Checkpoint not found');
-
-    log('Restoring checkpoint:', checkpoint.name);
-
-    // Restore to database
-    await database.restoreCheckpoint(checkpoint);
-
-    // Update local state
-    this.entries = [...checkpoint.entriesSnapshot];
-    this.characters = [...checkpoint.charactersSnapshot];
-    this.locations = [...checkpoint.locationsSnapshot];
-    this.items = [...checkpoint.itemsSnapshot];
-    this.storyBeats = [...checkpoint.storyBeatsSnapshot];
-    // Sort chapters by number to ensure correct ordering
-    this.chapters = [...checkpoint.chaptersSnapshot].sort((a, b) => a.number - b.number);
-
-    // Invalidate caches after restore
-    this.invalidateWordCountCache();
-    this.invalidateChapterCache();
-
-    // Restore time tracker (null clears)
-    await this.restoreTimeTrackerSnapshot(checkpoint.timeTrackerSnapshot);
-
-    log('Checkpoint restored');
-
-    // Emit event
-    eventBus.emit<CheckpointRestoredEvent>({ type: 'CheckpointRestored', checkpointId });
+  /**
+   * @deprecated Checkpoint restoration is no longer supported.
+   * Use createBranchFromCheckpoint() instead to explore alternate timelines.
+   * This prevents data loss issues when restoring across branches.
+   */
+  async restoreCheckpoint(_checkpointId: string): Promise<void> {
+    throw new Error(
+      'Checkpoint restoration is no longer supported. ' +
+      'To explore alternate paths, create a new branch from a checkpoint instead.'
+    );
   }
 
   // Delete a checkpoint
@@ -1849,6 +1924,485 @@ class StoryStore {
     await database.deleteCheckpoint(checkpointId);
     this.checkpoints = this.checkpoints.filter(cp => cp.id !== checkpointId);
     log('Checkpoint deleted:', checkpointId);
+  }
+
+  // ===== Branch Management =====
+
+  /**
+   * Get the current branch, or null if on the main branch (for legacy stories)
+   */
+  get currentBranch(): Branch | null {
+    if (!this.currentStory?.currentBranchId) return null;
+    return this.branches.find(b => b.id === this.currentStory!.currentBranchId) ?? null;
+  }
+
+  /**
+   * Create a new branch from an existing checkpoint.
+   * Only entries with checkpoints can be branched from.
+   */
+  async createBranchFromCheckpoint(name: string, forkEntryId: string, checkpointId: string): Promise<Branch> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    // Verify the checkpoint exists in memory
+    const checkpoint = this.checkpoints.find(cp => cp.id === checkpointId);
+    if (!checkpoint) {
+      throw new Error('Checkpoint not found in memory');
+    }
+
+    // Verify the checkpoint matches the fork entry
+    if (checkpoint.lastEntryId !== forkEntryId) {
+      throw new Error('Checkpoint does not match fork entry');
+    }
+
+    // Verify all foreign key references exist in the database
+    const dbCheckpoint = await database.getCheckpoint(checkpointId);
+    if (!dbCheckpoint) {
+      throw new Error(`Checkpoint ${checkpointId} not found in database`);
+    }
+
+    const dbEntry = await database.getStoryEntry(forkEntryId);
+    if (!dbEntry) {
+      throw new Error(`Fork entry ${forkEntryId} not found in database`);
+    }
+
+    const dbStory = await database.getStory(this.currentStory.id);
+    if (!dbStory) {
+      throw new Error(`Story ${this.currentStory.id} not found in database`);
+    }
+
+    // Determine parent branch (current branch, or null for main)
+    // IMPORTANT: Ensure it's explicitly null, not undefined
+    const parentBranchId = this.currentStory.currentBranchId ?? null;
+
+    // If there's a parent branch, verify it exists
+    if (parentBranchId !== null) {
+      const dbParentBranch = await database.getBranch(parentBranchId);
+      if (!dbParentBranch) {
+        throw new Error(`Parent branch ${parentBranchId} not found in database`);
+      }
+    }
+
+    // Create the branch
+    const branch: Branch = {
+      id: crypto.randomUUID(),
+      storyId: this.currentStory.id,
+      name,
+      parentBranchId,
+      forkEntryId,
+      checkpointId,
+      createdAt: Date.now(),
+    };
+
+    await database.addBranch(branch);
+    this.branches = [...this.branches, branch];
+
+    // Copy world state from checkpoint into database with the new branch_id
+    // This ensures the branch has its own copy of the world state at the fork point
+    log('Copying world state from checkpoint to branch:', branch.name);
+
+    // Copy characters
+    for (const char of checkpoint.charactersSnapshot) {
+      const branchChar: Character = { ...char, id: crypto.randomUUID(), branchId: branch.id };
+      await database.addCharacter(branchChar);
+    }
+
+    // Copy locations - need to remap connection IDs to new location IDs
+    const locationIdMap = new Map<string, string>(); // old ID -> new ID
+    for (const loc of checkpoint.locationsSnapshot) {
+      const newId = crypto.randomUUID();
+      locationIdMap.set(loc.id, newId);
+    }
+    for (const loc of checkpoint.locationsSnapshot) {
+      const newId = locationIdMap.get(loc.id)!;
+      const branchLoc: Location = {
+        ...loc,
+        id: newId,
+        branchId: branch.id,
+        // Remap connections to use new location IDs
+        connections: loc.connections.map(connId => locationIdMap.get(connId) ?? connId),
+      };
+      await database.addLocation(branchLoc);
+    }
+
+    // Copy items
+    for (const item of checkpoint.itemsSnapshot) {
+      const branchItem: Item = { ...item, id: crypto.randomUUID(), branchId: branch.id };
+      await database.addItem(branchItem);
+    }
+
+    // Copy story beats
+    for (const beat of checkpoint.storyBeatsSnapshot) {
+      const branchBeat: StoryBeat = { ...beat, id: crypto.randomUUID(), branchId: branch.id };
+      await database.addStoryBeat(branchBeat);
+    }
+
+    // Copy lorebook entries (if snapshot exists)
+    if (checkpoint.lorebookEntriesSnapshot) {
+      for (const entry of checkpoint.lorebookEntriesSnapshot) {
+        const branchEntry: Entry = { ...entry, id: crypto.randomUUID(), branchId: branch.id };
+        await database.addEntry(branchEntry);
+      }
+    }
+
+    // Switch to the new branch (skip restore since we just populated the world state)
+    await this.switchBranch(branch.id, true);
+
+    // Reload the world state from database to get the copied items into memory
+    await this.reloadEntriesForCurrentBranch();
+
+    // Restore time tracker from checkpoint
+    if (checkpoint.timeTrackerSnapshot) {
+      this.currentStory = { ...this.currentStory!, timeTracker: { ...checkpoint.timeTrackerSnapshot } };
+      await database.updateStory(this.currentStory!.id, { timeTracker: checkpoint.timeTrackerSnapshot });
+      log('Time tracker restored from checkpoint:', checkpoint.timeTrackerSnapshot);
+    }
+
+    log('Branch created:', name, 'from checkpoint:', checkpointId, {
+      characters: checkpoint.charactersSnapshot.length,
+      locations: checkpoint.locationsSnapshot.length,
+      items: checkpoint.itemsSnapshot.length,
+      storyBeats: checkpoint.storyBeatsSnapshot.length,
+      lorebookEntries: checkpoint.lorebookEntriesSnapshot?.length ?? 0,
+    });
+    return branch;
+  }
+
+  private buildBranchLineage(branchId: string): Branch[] {
+    const lineage: Branch[] = [];
+    let current: Branch | null = this.branches.find(b => b.id === branchId) ?? null;
+    const visited = new Set<string>();
+
+    while (current) {
+      if (visited.has(current.id)) break;
+      visited.add(current.id);
+      lineage.unshift(current);
+      const parentId = current.parentBranchId;
+      if (!parentId) break;
+      current = this.branches.find(b => b.id === parentId) ?? null;
+    }
+
+    return lineage;
+  }
+
+  private async getForkEntryPositions(lineage: Branch[]): Promise<Map<string, number | null>> {
+    const entries = await Promise.all(
+      lineage.map(branch => database.getStoryEntry(branch.forkEntryId))
+    );
+    const positions = new Map<string, number | null>();
+    entries.forEach((entry, index) => {
+      positions.set(lineage[index].id, entry?.position ?? null);
+    });
+    return positions;
+  }
+
+  private getCheckpointBranchId(checkpoint: Checkpoint): string | null {
+    const lastEntry = checkpoint.entriesSnapshot.find(e => e.id === checkpoint.lastEntryId);
+    return (lastEntry?.branchId ?? null);
+  }
+
+  /**
+   * Switch to a different branch.
+   * This reloads entries from the database filtered by the target branch.
+   * NO data is deleted - branches coexist in the database with different branch_ids.
+   * @param branchId - The branch to switch to (null for main branch)
+   * @param skipReload - If true, skip reloading entries (used when creating new branch from current state)
+   */
+  async switchBranch(branchId: string | null, skipReload: boolean = false): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    // Validate branch exists (if not null)
+    if (branchId !== null) {
+      const branch = this.branches.find(b => b.id === branchId);
+      if (!branch) throw new Error('Branch not found');
+    }
+
+    // Update story's current branch in database
+    await database.setStoryCurrentBranch(this.currentStory.id, branchId);
+    this.currentStory = { ...this.currentStory, currentBranchId: branchId };
+
+    // Reload entries from database if not skipping
+    // When creating a new branch, we skip because we're already at the correct state
+    if (!skipReload) {
+      await this.reloadEntriesForCurrentBranch();
+    }
+
+    // Invalidate caches
+    this.invalidateWordCountCache();
+    this.invalidateChapterCache();
+
+    log('Switched to branch:', branchId ?? 'main');
+  }
+
+  /**
+   * Reload entries and world state from database for the current branch.
+   * World state is now persisted per-branch in the database via branch_id columns.
+   * - For main branch: loads only items with null branch_id
+   * - For other branches: loads inherited items (null branch_id) + branch-specific items
+   */
+  private async reloadEntriesForCurrentBranch(): Promise<void> {
+    if (!this.currentStory) return;
+
+    const branchId = this.currentStory.currentBranchId;
+
+    if (branchId === null) {
+      // Main branch: load all data with null branch_id
+      const [entries, chapters, characters, locations, items, storyBeats, lorebookEntries] = await Promise.all([
+        database.getStoryEntriesForBranch(this.currentStory.id, null),
+        database.getChaptersForBranch(this.currentStory.id, null),
+        database.getCharactersForBranch(this.currentStory.id, null),
+        database.getLocationsForBranch(this.currentStory.id, null),
+        database.getItemsForBranch(this.currentStory.id, null),
+        database.getStoryBeatsForBranch(this.currentStory.id, null),
+        database.getEntriesForBranch(this.currentStory.id, null),
+      ]);
+
+      this.entries = entries;
+      this.chapters = chapters;
+      this.characters = characters;
+      this.locations = locations;
+      this.items = items;
+      this.storyBeats = storyBeats;
+      this.lorebookEntries = lorebookEntries;
+    } else {
+      // Non-main branch: load entries across branch lineage (main -> ancestors -> current)
+      const lineage = this.buildBranchLineage(branchId);
+      if (lineage.length === 0) return;
+
+      const forkPositions = await this.getForkEntryPositions(lineage);
+      const rootForkPosition = forkPositions.get(lineage[0].id);
+
+      const inheritedEntries = await database.getStoryEntriesForBranch(
+        this.currentStory.id,
+        null,
+        rootForkPosition ?? undefined
+      );
+
+      const branchEntries: StoryEntry[] = [];
+      for (let i = 0; i < lineage.length; i++) {
+        const branch = lineage[i];
+        const childForkPosition = i < lineage.length - 1
+          ? forkPositions.get(lineage[i + 1].id)
+          : undefined;
+        const entries = await database.getStoryEntriesForBranch(
+          this.currentStory.id,
+          branch.id,
+          childForkPosition ?? undefined
+        );
+        branchEntries.push(...entries);
+      }
+
+      this.entries = [...inheritedEntries, ...branchEntries].sort((a, b) => a.position - b.position);
+
+      const entryPositions = new Map<string, number>();
+      for (const entry of this.entries) {
+        entryPositions.set(entry.id, entry.position);
+      }
+
+      const chapters: Chapter[] = [];
+      const mainChapters = await database.getChaptersForBranch(this.currentStory.id, null);
+      if (rootForkPosition === null || rootForkPosition === undefined) {
+        chapters.push(...mainChapters);
+      } else {
+        chapters.push(
+          ...mainChapters.filter(ch => {
+            const endPosition = entryPositions.get(ch.endEntryId);
+            return endPosition !== undefined && endPosition <= rootForkPosition;
+          })
+        );
+      }
+
+      for (let i = 0; i < lineage.length; i++) {
+        const branch = lineage[i];
+        const childForkPosition = i < lineage.length - 1
+          ? forkPositions.get(lineage[i + 1].id)
+          : undefined;
+        const branchChapters = await database.getChaptersForBranch(this.currentStory.id, branch.id);
+        if (childForkPosition === null || childForkPosition === undefined) {
+          chapters.push(...branchChapters);
+        } else {
+          chapters.push(
+            ...branchChapters.filter(ch => {
+              const endPosition = entryPositions.get(ch.endEntryId);
+              return endPosition !== undefined && endPosition <= childForkPosition;
+            })
+          );
+        }
+      }
+
+      this.chapters = chapters.sort((a, b) => a.number - b.number);
+
+      // Load world state from database (branch-specific snapshots)
+      // World state is persisted per-branch via branch_id columns
+      const [characters, locations, items, storyBeats, lorebookEntries] = await Promise.all([
+        database.getCharactersForBranch(this.currentStory.id, branchId),
+        database.getLocationsForBranch(this.currentStory.id, branchId),
+        database.getItemsForBranch(this.currentStory.id, branchId),
+        database.getStoryBeatsForBranch(this.currentStory.id, branchId),
+        database.getEntriesForBranch(this.currentStory.id, branchId),
+      ]);
+
+      this.characters = characters;
+      this.locations = locations;
+      this.items = items;
+      this.storyBeats = storyBeats;
+      this.lorebookEntries = lorebookEntries;
+
+      // Get the current branch name from lineage for logging
+      const currentBranch = lineage[lineage.length - 1];
+      log('Loaded world state for branch:', currentBranch?.name ?? branchId, {
+        characters: characters.length,
+        locations: locations.length,
+        items: items.length,
+        storyBeats: storyBeats.length,
+        lorebookEntries: lorebookEntries.length,
+      });
+    }
+
+    // Restore time tracker from the last entry's metadata
+    await this.restoreTimeFromLastEntry();
+  }
+
+  /**
+   * Restore time tracker from the last entry's timeEnd metadata.
+   * Called after loading entries for a branch to ensure time consistency.
+   */
+  private async restoreTimeFromLastEntry(): Promise<void> {
+    if (!this.currentStory || this.entries.length === 0) return;
+
+    const lastEntry = this.entries[this.entries.length - 1];
+    const timeEnd = lastEntry.metadata?.timeEnd;
+
+    if (timeEnd && typeof timeEnd === 'object') {
+      const newTime = timeEnd as TimeTracker;
+      // Only update if different to avoid unnecessary DB writes
+      const current = this.currentStory.timeTracker;
+      if (!current ||
+          current.years !== newTime.years ||
+          current.days !== newTime.days ||
+          current.hours !== newTime.hours ||
+          current.minutes !== newTime.minutes) {
+        this.currentStory = { ...this.currentStory, timeTracker: newTime };
+        await database.updateStory(this.currentStory.id, { timeTracker: newTime });
+        log('Time tracker restored from last entry:', newTime);
+      }
+    }
+  }
+
+  /**
+   * Rename a branch.
+   */
+  async renameBranch(branchId: string, newName: string): Promise<void> {
+    await database.updateBranch(branchId, { name: newName });
+    this.branches = this.branches.map(b =>
+      b.id === branchId ? { ...b, name: newName } : b
+    );
+    log('Branch renamed:', branchId, 'to', newName);
+  }
+
+  /**
+   * Delete a branch.
+   * Cannot delete the main branch (null), the current branch, or branches with children.
+   */
+  async deleteBranch(branchId: string): Promise<void> {
+    if (!this.currentStory) throw new Error('No story loaded');
+
+    // Cannot delete current branch
+    if (this.currentStory.currentBranchId === branchId) {
+      throw new Error('Cannot delete the current branch');
+    }
+
+    // Cannot delete branches that have child branches
+    const childBranches = this.branches.filter(b => b.parentBranchId === branchId);
+    if (childBranches.length > 0) {
+      const childNames = childBranches.map(b => `"${b.name}"`).join(', ');
+      throw new Error(
+        `Cannot delete this branch because it has child branches: ${childNames}. ` +
+        `Delete the child branches first.`
+      );
+    }
+
+    // Delete associated checkpoints first
+    const checkpointsToDelete = this.checkpoints.filter(
+      checkpoint => this.getCheckpointBranchId(checkpoint) === branchId
+    );
+    await Promise.all(checkpointsToDelete.map(cp => database.deleteCheckpoint(cp.id)));
+    this.checkpoints = this.checkpoints.filter(
+      checkpoint => this.getCheckpointBranchId(checkpoint) !== branchId
+    );
+
+    // Delete the branch from database
+    await database.deleteBranch(branchId);
+
+    // Update in-memory state: remove deleted branch
+    // Note: We already checked that there are no child branches, so no reparenting needed
+    this.branches = this.branches.filter(b => b.id !== branchId);
+
+    log('Branch deleted:', branchId);
+  }
+
+  /**
+   * Get the total entry count for a branch including inherited history.
+   */
+  async getBranchEntryCount(branchId: string | null): Promise<number> {
+    if (!this.currentStory) return 0;
+
+    if (branchId === null) {
+      const entries = await database.getStoryEntriesForBranch(this.currentStory.id, null);
+      return entries.length;
+    }
+
+    const lineage = this.buildBranchLineage(branchId);
+    if (lineage.length === 0) return 0;
+
+    const forkPositions = await this.getForkEntryPositions(lineage);
+    const rootForkPosition = forkPositions.get(lineage[0].id);
+
+    let count = 0;
+    const mainEntries = await database.getStoryEntriesForBranch(
+      this.currentStory.id,
+      null,
+      rootForkPosition ?? undefined
+    );
+    count += mainEntries.length;
+
+    for (let i = 0; i < lineage.length; i++) {
+      const branch = lineage[i];
+      const childForkPosition = i < lineage.length - 1
+        ? forkPositions.get(lineage[i + 1].id)
+        : undefined;
+      const entries = await database.getStoryEntriesForBranch(
+        this.currentStory.id,
+        branch.id,
+        childForkPosition ?? undefined
+      );
+      count += entries.length;
+    }
+
+    return count;
+  }
+
+  /**
+   * Get the branch tree structure for UI display.
+   * Returns branches organized by parent-child relationships.
+   */
+  getBranchTree(): { branch: Branch | null; children: Branch[] }[] {
+    // Build tree starting from root (null parent = main branch children)
+    const rootBranches = this.branches.filter(b => b.parentBranchId === null);
+    const tree: { branch: Branch | null; children: Branch[] }[] = [];
+
+    // Main branch (implicit)
+    tree.push({
+      branch: null, // null represents main branch
+      children: rootBranches,
+    });
+
+    // Add all branches with their children
+    for (const branch of this.branches) {
+      const children = this.branches.filter(b => b.parentBranchId === branch.id);
+      tree.push({ branch, children });
+    }
+
+    return tree;
   }
 
   /**
@@ -2073,6 +2627,7 @@ class StoryStore {
       retryState: null,
       styleReviewState: null,
       timeTracker: null,
+      currentBranchId: null,
     });
 
     this.allStories = [storyData, ...this.allStories];
@@ -2091,6 +2646,7 @@ class StoryStore {
         metadata: { source: 'wizard' },
         visualDescriptors: data.protagonist.visualDescriptors ?? [],
         portrait: data.protagonist.portrait ?? null,
+        branchId: null, // New stories start on main branch
       };
       await database.addCharacter(protagonist);
       log('Added protagonist:', protagonist.name);
@@ -2107,6 +2663,7 @@ class StoryStore {
         current: true,
         connections: [],
         metadata: { source: 'wizard' },
+        branchId: null, // New stories start on main branch
       };
       await database.addLocation(location);
       log('Added starting location:', location.name);
@@ -2124,6 +2681,7 @@ class StoryStore {
         equipped: itemData.equipped ?? false,
         location: itemData.location ?? 'inventory',
         metadata: { source: 'wizard' },
+        branchId: null, // New stories start on main branch
       };
       await database.addItem(item);
     }
@@ -2142,6 +2700,7 @@ class StoryStore {
         metadata: { source: 'wizard' },
         visualDescriptors: charData.visualDescriptors ?? [],
         portrait: charData.portrait ?? null,
+        branchId: null, // New stories start on main branch
       };
       await database.addCharacter(character);
       log('Added supporting character:', character.name);
@@ -2159,6 +2718,7 @@ class StoryStore {
         parentId: null,
         position: 0,
         metadata: { source: 'wizard', tokenCount, timeStart: { ...baseTime }, timeEnd: { ...baseTime } },
+        branchId: null,
       });
       log('Added opening scene');
     }

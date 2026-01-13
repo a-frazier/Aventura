@@ -447,6 +447,7 @@ export class EntryRetrievalService {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       loreManagementBlacklisted: false,
+      branchId: char.branchId,
     };
   }
 
@@ -480,6 +481,7 @@ export class EntryRetrievalService {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       loreManagementBlacklisted: false,
+      branchId: loc.branchId,
     };
   }
 
@@ -521,6 +523,7 @@ export class EntryRetrievalService {
       createdAt: Date.now(),
       updatedAt: Date.now(),
       loreManagementBlacklisted: false,
+      branchId: item.branchId,
     };
   }
 

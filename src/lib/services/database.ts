@@ -9,6 +9,7 @@ import type {
   Template,
   Chapter,
   Checkpoint,
+  Branch,
   MemoryConfig,
   Entry,
   EntryType,
@@ -262,6 +263,56 @@ class DatabaseService {
   }
 
   /**
+   * Get story entries filtered by branch.
+   * @param storyId - The story ID
+   * @param branchId - The branch ID (null for main branch entries)
+   * @param maxPosition - Optional max position (inclusive) for inherited entries
+   */
+  async getStoryEntriesForBranch(
+    storyId: string,
+    branchId: string | null,
+    maxPosition?: number
+  ): Promise<StoryEntry[]> {
+    const db = await this.getDb();
+
+    let query: string;
+    let params: any[];
+
+    if (branchId === null) {
+      // Main branch: entries with null branch_id
+      if (maxPosition !== undefined) {
+        // Limit to entries up to a certain position (for inherited entries)
+        query = 'SELECT * FROM story_entries WHERE story_id = ? AND branch_id IS NULL AND position <= ? ORDER BY position ASC';
+        params = [storyId, maxPosition];
+      } else {
+        query = 'SELECT * FROM story_entries WHERE story_id = ? AND branch_id IS NULL ORDER BY position ASC';
+        params = [storyId];
+      }
+    } else {
+      // Specific branch
+      if (maxPosition !== undefined) {
+        query = 'SELECT * FROM story_entries WHERE story_id = ? AND branch_id = ? AND position <= ? ORDER BY position ASC';
+        params = [storyId, branchId, maxPosition];
+      } else {
+        query = 'SELECT * FROM story_entries WHERE story_id = ? AND branch_id = ? ORDER BY position ASC';
+        params = [storyId, branchId];
+      }
+    }
+
+    const results = await db.select<any[]>(query, params);
+    return results.map(this.mapStoryEntry);
+  }
+
+  async getStoryEntry(id: string): Promise<StoryEntry | null> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM story_entries WHERE id = ?',
+      [id]
+    );
+    return results.length > 0 ? this.mapStoryEntry(results[0]) : null;
+  }
+
+  /**
    * Get the count of story entries without loading them all.
    * Useful for UI display and pagination calculations.
    */
@@ -294,8 +345,8 @@ class DatabaseService {
     const db = await this.getDb();
     const now = Date.now();
     await db.execute(
-      `INSERT INTO story_entries (id, story_id, type, content, parent_id, position, created_at, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO story_entries (id, story_id, type, content, parent_id, position, created_at, metadata, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id,
         entry.storyId,
@@ -305,18 +356,57 @@ class DatabaseService {
         entry.position,
         now,
         entry.metadata ? JSON.stringify(entry.metadata) : null,
+        entry.branchId || null,
       ]
     );
     return { ...entry, createdAt: now };
   }
 
-  async getNextEntryPosition(storyId: string): Promise<number> {
+  async getNextEntryPosition(storyId: string, branchId?: string | null): Promise<number> {
     const db = await this.getDb();
-    const result = await db.select<{ maxPos: number | null }[]>(
-      'SELECT MAX(position) as maxPos FROM story_entries WHERE story_id = ?',
-      [storyId]
-    );
-    return (result[0]?.maxPos ?? -1) + 1;
+
+    if (branchId === undefined || branchId === null) {
+      // Main branch: max position of null branch_id entries
+      const result = await db.select<{ maxPos: number | null }[]>(
+        'SELECT MAX(position) as maxPos FROM story_entries WHERE story_id = ? AND branch_id IS NULL',
+        [storyId]
+      );
+      return (result[0]?.maxPos ?? -1) + 1;
+    } else {
+      // Non-main branch: max position of branch-specific entries
+      const result = await db.select<{ maxPos: number | null }[]>(
+        'SELECT MAX(position) as maxPos FROM story_entries WHERE story_id = ? AND branch_id = ?',
+        [storyId, branchId]
+      );
+
+      if (result[0]?.maxPos !== null) {
+        return result[0].maxPos + 1;
+      }
+
+      // No branch-specific entries yet - get the fork position from branch record
+      const branchResult = await db.select<{ fork_entry_id: string }[]>(
+        'SELECT fork_entry_id FROM branches WHERE id = ?',
+        [branchId]
+      );
+
+      if (branchResult.length > 0) {
+        const forkEntryResult = await db.select<{ position: number }[]>(
+          'SELECT position FROM story_entries WHERE id = ?',
+          [branchResult[0].fork_entry_id]
+        );
+        if (forkEntryResult.length > 0) {
+          // Start branch entries right after the fork point
+          return forkEntryResult[0].position + 1;
+        }
+        // Fork entry was deleted - this indicates database corruption
+        console.error(`[DatabaseService] Branch ${branchId} references missing fork entry: ${branchResult[0].fork_entry_id}`);
+        throw new Error(`Branch fork entry not found. The branch may be corrupted.`);
+      }
+
+      // Branch record not found
+      console.error(`[DatabaseService] Branch not found: ${branchId}`);
+      throw new Error(`Branch not found: ${branchId}`);
+    }
   }
 
   async updateStoryEntry(id: string, updates: Partial<StoryEntry>): Promise<void> {
@@ -360,11 +450,26 @@ class DatabaseService {
     return results.map(this.mapCharacter);
   }
 
+  /**
+   * Get characters filtered by branch.
+   * Each branch has its own complete copy of world state, so we only return exact matches.
+   */
+  async getCharactersForBranch(storyId: string, branchId: string | null): Promise<Character[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      branchId === null
+        ? 'SELECT * FROM characters WHERE story_id = ? AND branch_id IS NULL'
+        : 'SELECT * FROM characters WHERE story_id = ? AND branch_id = ?',
+      branchId === null ? [storyId] : [storyId, branchId]
+    );
+    return results.map(this.mapCharacter);
+  }
+
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -376,6 +481,7 @@ class DatabaseService {
         character.portrait || null,
         character.status,
         character.metadata ? JSON.stringify(character.metadata) : null,
+        character.branchId || null,
       ]
     );
   }
@@ -414,11 +520,26 @@ class DatabaseService {
     return results.map(this.mapLocation);
   }
 
+  /**
+   * Get locations filtered by branch.
+   * Each branch has its own complete copy of world state, so we only return exact matches.
+   */
+  async getLocationsForBranch(storyId: string, branchId: string | null): Promise<Location[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      branchId === null
+        ? 'SELECT * FROM locations WHERE story_id = ? AND branch_id IS NULL'
+        : 'SELECT * FROM locations WHERE story_id = ? AND branch_id = ?',
+      branchId === null ? [storyId] : [storyId, branchId]
+    );
+    return results.map(this.mapLocation);
+  }
+
   async addLocation(location: Location): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO locations (id, story_id, name, description, visited, current, connections, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO locations (id, story_id, name, description, visited, current, connections, metadata, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         location.id,
         location.storyId,
@@ -428,6 +549,7 @@ class DatabaseService {
         location.current ? 1 : 0,
         JSON.stringify(location.connections),
         location.metadata ? JSON.stringify(location.metadata) : null,
+        location.branchId || null,
       ]
     );
   }
@@ -470,11 +592,26 @@ class DatabaseService {
     return results.map(this.mapItem);
   }
 
+  /**
+   * Get items filtered by branch.
+   * Each branch has its own complete copy of world state, so we only return exact matches.
+   */
+  async getItemsForBranch(storyId: string, branchId: string | null): Promise<Item[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      branchId === null
+        ? 'SELECT * FROM items WHERE story_id = ? AND branch_id IS NULL'
+        : 'SELECT * FROM items WHERE story_id = ? AND branch_id = ?',
+      branchId === null ? [storyId] : [storyId, branchId]
+    );
+    return results.map(this.mapItem);
+  }
+
   async addItem(item: Item): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO items (id, story_id, name, description, quantity, equipped, location, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO items (id, story_id, name, description, quantity, equipped, location, metadata, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         item.storyId,
@@ -484,6 +621,7 @@ class DatabaseService {
         item.equipped ? 1 : 0,
         item.location,
         item.metadata ? JSON.stringify(item.metadata) : null,
+        item.branchId || null,
       ]
     );
   }
@@ -538,11 +676,26 @@ class DatabaseService {
     return results.map(this.mapStoryBeat);
   }
 
+  /**
+   * Get story beats filtered by branch.
+   * Each branch has its own complete copy of world state, so we only return exact matches.
+   */
+  async getStoryBeatsForBranch(storyId: string, branchId: string | null): Promise<StoryBeat[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      branchId === null
+        ? 'SELECT * FROM story_beats WHERE story_id = ? AND branch_id IS NULL'
+        : 'SELECT * FROM story_beats WHERE story_id = ? AND branch_id = ?',
+      branchId === null ? [storyId] : [storyId, branchId]
+    );
+    return results.map(this.mapStoryBeat);
+  }
+
   async addStoryBeat(beat: StoryBeat): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO story_beats (id, story_id, title, description, type, status, triggered_at, resolved_at, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO story_beats (id, story_id, title, description, type, status, triggered_at, resolved_at, metadata, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         beat.id,
         beat.storyId,
@@ -553,6 +706,7 @@ class DatabaseService {
         beat.triggeredAt,
         beat.resolvedAt ?? null,
         beat.metadata ? JSON.stringify(beat.metadata) : null,
+        beat.branchId || null,
       ]
     );
   }
@@ -597,6 +751,22 @@ class DatabaseService {
     return results.map(this.mapChapter);
   }
 
+  /**
+   * Get chapters filtered by branch.
+   * @param storyId - The story ID
+   * @param branchId - The branch ID (null for main branch chapters)
+   */
+  async getChaptersForBranch(storyId: string, branchId: string | null): Promise<Chapter[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      branchId === null
+        ? 'SELECT * FROM chapters WHERE story_id = ? AND branch_id IS NULL ORDER BY number ASC'
+        : 'SELECT * FROM chapters WHERE story_id = ? AND branch_id = ? ORDER BY number ASC',
+      branchId === null ? [storyId] : [storyId, branchId]
+    );
+    return results.map(this.mapChapter);
+  }
+
   async getChapter(id: string): Promise<Chapter | null> {
     const db = await this.getDb();
     const results = await db.select<any[]>(
@@ -621,8 +791,8 @@ class DatabaseService {
       `INSERT INTO chapters (
         id, story_id, number, title, start_entry_id, end_entry_id, entry_count,
         summary, start_time, end_time, keywords, characters, locations, plot_threads, emotional_tone,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        branch_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         chapter.id,
         chapter.storyId,
@@ -639,6 +809,7 @@ class DatabaseService {
         JSON.stringify(chapter.locations),
         JSON.stringify(chapter.plotThreads),
         chapter.emotionalTone,
+        chapter.branchId || null,
         chapter.createdAt,
       ]
     );
@@ -694,8 +865,9 @@ class DatabaseService {
       `INSERT INTO checkpoints (
         id, story_id, name, last_entry_id, last_entry_preview, entry_count,
         entries_snapshot, characters_snapshot, locations_snapshot,
-        items_snapshot, story_beats_snapshot, chapters_snapshot, time_tracker_snapshot, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        items_snapshot, story_beats_snapshot, chapters_snapshot, time_tracker_snapshot,
+        lorebook_entries_snapshot, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         checkpoint.id,
         checkpoint.storyId,
@@ -710,6 +882,7 @@ class DatabaseService {
         JSON.stringify(checkpoint.storyBeatsSnapshot),
         JSON.stringify(checkpoint.chaptersSnapshot),
         checkpoint.timeTrackerSnapshot ? JSON.stringify(checkpoint.timeTrackerSnapshot) : null,
+        checkpoint.lorebookEntriesSnapshot ? JSON.stringify(checkpoint.lorebookEntriesSnapshot) : null,
         checkpoint.createdAt,
       ]
     );
@@ -720,46 +893,89 @@ class DatabaseService {
     await db.execute('DELETE FROM checkpoints WHERE id = ?', [id]);
   }
 
-  async restoreCheckpoint(checkpoint: Checkpoint): Promise<void> {
+  /**
+   * @deprecated This method is no longer used. Checkpoint restoration has been
+   * replaced with branching to prevent data loss issues. Use createBranchFromCheckpoint
+   * in the story store instead.
+   */
+  async restoreCheckpoint(checkpoint: Checkpoint, branchId: string | null): Promise<void> {
     const db = await this.getDb();
     const storyId = checkpoint.storyId;
 
+    const branchClause = branchId === null ? 'branch_id IS NULL' : 'branch_id = ?';
+    const branchParams = branchId === null ? [] : [branchId];
+
     // Delete current state
-    await db.execute('DELETE FROM story_entries WHERE story_id = ?', [storyId]);
-    await db.execute('DELETE FROM characters WHERE story_id = ?', [storyId]);
-    await db.execute('DELETE FROM locations WHERE story_id = ?', [storyId]);
-    await db.execute('DELETE FROM items WHERE story_id = ?', [storyId]);
-    await db.execute('DELETE FROM story_beats WHERE story_id = ?', [storyId]);
-    await db.execute('DELETE FROM chapters WHERE story_id = ?', [storyId]);
+    await db.execute(
+      `DELETE FROM story_entries WHERE story_id = ? AND ${branchClause}`,
+      [storyId, ...branchParams]
+    );
+    await db.execute(
+      `DELETE FROM characters WHERE story_id = ? AND ${branchClause}`,
+      [storyId, ...branchParams]
+    );
+    await db.execute(
+      `DELETE FROM locations WHERE story_id = ? AND ${branchClause}`,
+      [storyId, ...branchParams]
+    );
+    await db.execute(
+      `DELETE FROM items WHERE story_id = ? AND ${branchClause}`,
+      [storyId, ...branchParams]
+    );
+    await db.execute(
+      `DELETE FROM story_beats WHERE story_id = ? AND ${branchClause}`,
+      [storyId, ...branchParams]
+    );
+    await db.execute(
+      `DELETE FROM chapters WHERE story_id = ? AND ${branchClause}`,
+      [storyId, ...branchParams]
+    );
+    // Also delete lorebook entries if we have a snapshot to restore
+    if (checkpoint.lorebookEntriesSnapshot !== undefined) {
+      await db.execute(
+        `DELETE FROM entries WHERE story_id = ? AND ${branchClause}`,
+        [storyId, ...branchParams]
+      );
+    }
+
+    const matchesBranch = (entryBranchId: string | null | undefined) =>
+      (entryBranchId ?? null) === branchId;
 
     // Restore entries
-    for (const entry of checkpoint.entriesSnapshot) {
+    for (const entry of checkpoint.entriesSnapshot.filter(e => matchesBranch(e.branchId))) {
       await this.addStoryEntry(entry);
     }
 
     // Restore characters
-    for (const character of checkpoint.charactersSnapshot) {
+    for (const character of checkpoint.charactersSnapshot.filter(c => matchesBranch(c.branchId))) {
       await this.addCharacter(character);
     }
 
     // Restore locations
-    for (const location of checkpoint.locationsSnapshot) {
+    for (const location of checkpoint.locationsSnapshot.filter(l => matchesBranch(l.branchId))) {
       await this.addLocation(location);
     }
 
     // Restore items
-    for (const item of checkpoint.itemsSnapshot) {
+    for (const item of checkpoint.itemsSnapshot.filter(i => matchesBranch(i.branchId))) {
       await this.addItem(item);
     }
 
     // Restore story beats
-    for (const beat of checkpoint.storyBeatsSnapshot) {
+    for (const beat of checkpoint.storyBeatsSnapshot.filter(b => matchesBranch(b.branchId))) {
       await this.addStoryBeat(beat);
     }
 
     // Restore chapters
-    for (const chapter of checkpoint.chaptersSnapshot) {
+    for (const chapter of checkpoint.chaptersSnapshot.filter(ch => matchesBranch(ch.branchId))) {
       await this.addChapter(chapter);
+    }
+
+    // Restore lorebook entries (if snapshot exists - for backwards compatibility)
+    if (checkpoint.lorebookEntriesSnapshot) {
+      for (const entry of checkpoint.lorebookEntriesSnapshot.filter(e => matchesBranch(e.branchId))) {
+        await this.addEntry(entry);
+      }
     }
   }
 
@@ -838,6 +1054,86 @@ class DatabaseService {
     }
   }
 
+  // ===== Branch Operations (for story branching/alternate timelines) =====
+
+  async getBranches(storyId: string): Promise<Branch[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM branches WHERE story_id = ? ORDER BY created_at ASC',
+      [storyId]
+    );
+    return results.map(this.mapBranch);
+  }
+
+  async getBranch(id: string): Promise<Branch | null> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM branches WHERE id = ?',
+      [id]
+    );
+    return results.length > 0 ? this.mapBranch(results[0]) : null;
+  }
+
+  async addBranch(branch: Branch): Promise<void> {
+    const db = await this.getDb();
+    await db.execute(
+      `INSERT INTO branches (id, story_id, name, parent_branch_id, fork_entry_id, checkpoint_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        branch.id,
+        branch.storyId,
+        branch.name,
+        branch.parentBranchId ?? null,
+        branch.forkEntryId,
+        branch.checkpointId ?? null,
+        branch.createdAt,
+      ]
+    );
+  }
+
+  async updateBranch(id: string, updates: Partial<Pick<Branch, 'name'>>): Promise<void> {
+    const db = await this.getDb();
+    if (updates.name !== undefined) {
+      await db.execute('UPDATE branches SET name = ? WHERE id = ?', [updates.name, id]);
+    }
+  }
+
+  async deleteBranch(id: string): Promise<void> {
+    const db = await this.getDb();
+    // Delete story entries belonging to this branch
+    await db.execute('DELETE FROM story_entries WHERE branch_id = ?', [id]);
+    // Delete chapters belonging to this branch
+    await db.execute('DELETE FROM chapters WHERE branch_id = ?', [id]);
+    // Delete world state items belonging to this branch
+    await db.execute('DELETE FROM characters WHERE branch_id = ?', [id]);
+    await db.execute('DELETE FROM locations WHERE branch_id = ?', [id]);
+    await db.execute('DELETE FROM items WHERE branch_id = ?', [id]);
+    await db.execute('DELETE FROM story_beats WHERE branch_id = ?', [id]);
+    await db.execute('DELETE FROM entries WHERE branch_id = ?', [id]);
+    // Delete the branch itself
+    await db.execute('DELETE FROM branches WHERE id = ?', [id]);
+  }
+
+  async setStoryCurrentBranch(storyId: string, branchId: string | null): Promise<void> {
+    const db = await this.getDb();
+    await db.execute(
+      'UPDATE stories SET current_branch_id = ?, updated_at = ? WHERE id = ?',
+      [branchId, Date.now(), storyId]
+    );
+  }
+
+  private mapBranch(row: any): Branch {
+    return {
+      id: row.id,
+      storyId: row.story_id,
+      name: row.name,
+      parentBranchId: row.parent_branch_id || null,
+      forkEntryId: row.fork_entry_id,
+      checkpointId: row.checkpoint_id || null,
+      createdAt: row.created_at,
+    };
+  }
+
   // ===== Entry/Lorebook Operations (per design doc section 3.2) =====
 
   async getEntries(storyId: string): Promise<Entry[]> {
@@ -845,6 +1141,21 @@ class DatabaseService {
     const results = await db.select<any[]>(
       'SELECT * FROM entries WHERE story_id = ? ORDER BY created_at ASC',
       [storyId]
+    );
+    return results.map(this.mapEntry);
+  }
+
+  /**
+   * Get lorebook entries filtered by branch.
+   * Each branch has its own complete copy of world state, so we only return exact matches.
+   */
+  async getEntriesForBranch(storyId: string, branchId: string | null): Promise<Entry[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      branchId === null
+        ? 'SELECT * FROM entries WHERE story_id = ? AND branch_id IS NULL ORDER BY created_at ASC'
+        : 'SELECT * FROM entries WHERE story_id = ? AND branch_id = ? ORDER BY created_at ASC',
+      branchId === null ? [storyId] : [storyId, branchId]
     );
     return results.map(this.mapEntry);
   }
@@ -889,8 +1200,8 @@ class DatabaseService {
         id, story_id, name, type, description, hidden_info, aliases,
         state, adventure_state, creative_state, injection,
         first_mentioned, last_mentioned, mention_count, created_by,
-        created_at, updated_at, lore_management_blacklisted
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        created_at, updated_at, lore_management_blacklisted, branch_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id,
         entry.storyId,
@@ -910,6 +1221,7 @@ class DatabaseService {
         entry.createdAt,
         entry.updatedAt,
         entry.loreManagementBlacklisted ? 1 : 0,
+        entry.branchId || null,
       ]
     );
   }
@@ -1147,6 +1459,7 @@ class DatabaseService {
       retryState,
       styleReviewState: row.style_review_state ? JSON.parse(row.style_review_state) : null,
       timeTracker: row.time_tracker ? JSON.parse(row.time_tracker) : null,
+      currentBranchId: row.current_branch_id || null,
     };
   }
 
@@ -1160,6 +1473,7 @@ class DatabaseService {
       position: row.position,
       createdAt: row.created_at,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      branchId: row.branch_id || null,
     };
   }
 
@@ -1175,6 +1489,7 @@ class DatabaseService {
       portrait: row.portrait || null,
       status: row.status,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      branchId: row.branch_id || null,
     };
   }
 
@@ -1188,6 +1503,7 @@ class DatabaseService {
       current: row.current === 1,
       connections: row.connections ? JSON.parse(row.connections) : [],
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      branchId: row.branch_id || null,
     };
   }
 
@@ -1201,6 +1517,7 @@ class DatabaseService {
       equipped: row.equipped === 1,
       location: row.location,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      branchId: row.branch_id || null,
     };
   }
 
@@ -1215,6 +1532,7 @@ class DatabaseService {
       triggeredAt: row.triggered_at,
       resolvedAt: row.resolved_at ?? null,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      branchId: row.branch_id || null,
     };
   }
 
@@ -1248,6 +1566,7 @@ class DatabaseService {
       locations: row.locations ? JSON.parse(row.locations) : [],
       plotThreads: row.plot_threads ? JSON.parse(row.plot_threads) : [],
       emotionalTone: row.emotional_tone,
+      branchId: row.branch_id || null,
       createdAt: row.created_at,
     };
   }
@@ -1268,6 +1587,8 @@ class DatabaseService {
       chaptersSnapshot: row.chapters_snapshot ? JSON.parse(row.chapters_snapshot) : [],
       // Use null when missing - old checkpoints without time tracking should reset time to null on restore
       timeTrackerSnapshot: row.time_tracker_snapshot ? JSON.parse(row.time_tracker_snapshot) : null,
+      // undefined if column doesn't exist (old checkpoints) - preserve current lorebook on restore
+      lorebookEntriesSnapshot: row.lorebook_entries_snapshot ? JSON.parse(row.lorebook_entries_snapshot) : undefined,
       createdAt: row.created_at,
     };
   }
@@ -1292,6 +1613,7 @@ class DatabaseService {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       loreManagementBlacklisted: row.lore_management_blacklisted === 1,
+      branchId: row.branch_id || null,
     };
   }
 }

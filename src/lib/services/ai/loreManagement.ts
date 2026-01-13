@@ -378,6 +378,7 @@ interface LoreManagementContext {
 
 interface ToolExecutionContext {
   storyId: string;
+  branchId: string | null;
   entries: Entry[];
   recentMessages: StoryEntry[];
   chapters: Chapter[];
@@ -662,7 +663,7 @@ export class LoreManagementService {
       }
 
       case 'create_entry': {
-        const newEntry = this.createEntry(context.storyId, args);
+        const newEntry = this.createEntry(context.storyId, context.branchId, args);
         context.entries.push(newEntry);
         await context.onCreateEntry(newEntry);
         this.changes.push({ type: 'create', entry: newEntry });
@@ -745,7 +746,7 @@ export class LoreManagementService {
         }
 
         // Use the type of the first entry
-        const mergedEntry = this.createEntry(context.storyId, {
+        const mergedEntry = this.createEntry(context.storyId, context.branchId, {
           name: args.merged_name,
           type: entriesToMerge[0].type,
           description: args.merged_description,
@@ -856,7 +857,7 @@ export class LoreManagementService {
     }
   }
 
-  private createEntry(storyId: string, args: {
+  private createEntry(storyId: string, branchId: string | null, args: {
     name: string;
     type: EntryType;
     description: string;
@@ -891,6 +892,7 @@ export class LoreManagementService {
       createdAt: now,
       updatedAt: now,
       loreManagementBlacklisted: false,
+      branchId,
     };
   }
 

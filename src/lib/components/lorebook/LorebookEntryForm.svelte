@@ -179,6 +179,7 @@
         createdAt: entry?.createdAt ?? now,
         updatedAt: now,
         loreManagementBlacklisted,
+        branchId: entry?.branchId ?? story.currentStory?.currentBranchId ?? null,
       };
 
       onSave(entryData);

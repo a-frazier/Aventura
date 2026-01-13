@@ -283,6 +283,7 @@ class ExportService {
         retryState: null, // Clear retry state on import
         styleReviewState: data.styleReviewState ?? null, // Restore style review state from export (v1.2.0+)
         timeTracker: data.story.timeTracker ?? null, // Restore time tracker from export
+        currentBranchId: null, // Branches are not exported/imported yet
       };
 
       await database.createStory(importedStory);
@@ -300,6 +301,7 @@ class ExportService {
           parentId: entry.parentId ? oldToNewId.get(entry.parentId) ?? null : null,
           position: entry.position,
           metadata: entry.metadata,
+          branchId: null, // Imported entries go to main branch
         });
       }
 
@@ -320,6 +322,7 @@ class ExportService {
             metadata: char.metadata,
             visualDescriptors: char.visualDescriptors ?? [],
             portrait: char.portrait ?? null,
+            branchId: null, // Imported stories start on main branch
           });
         }
       }
@@ -339,6 +342,7 @@ class ExportService {
             current: loc.current,
             connections: loc.connections.map(c => oldToNewId.get(c) ?? c),
             metadata: loc.metadata,
+            branchId: null, // Imported stories start on main branch
           });
         }
       }
@@ -358,6 +362,7 @@ class ExportService {
             equipped: item.equipped,
             location: item.location,
             metadata: item.metadata,
+            branchId: null, // Imported stories start on main branch
           });
         }
       }
@@ -378,6 +383,7 @@ class ExportService {
             triggeredAt: beat.triggeredAt,
             resolvedAt: beat.resolvedAt ?? null,
             metadata: beat.metadata,
+            branchId: null, // Imported stories start on main branch
           });
         }
       }
@@ -407,6 +413,7 @@ class ExportService {
             createdAt: entry.createdAt || Date.now(),
             updatedAt: Date.now(),
             loreManagementBlacklisted: entry.loreManagementBlacklisted || false,
+            branchId: null, // Imported stories start on main branch
           });
         }
       }

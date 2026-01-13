@@ -26,6 +26,7 @@ export interface Story {
   retryState: PersistentRetryState | null;
   styleReviewState: PersistentStyleReviewState | null;
   timeTracker: TimeTracker | null;
+  currentBranchId: string | null;  // Active branch (null = main branch for legacy stories)
 }
 
 // Persistent retry state - lightweight version saved to database
@@ -111,6 +112,7 @@ export interface StoryEntry {
   position: number;
   createdAt: number;
   metadata: EntryMetadata | null;
+  branchId: string | null;  // Branch this entry belongs to (null = main branch for legacy)
 }
 
 export interface EntryMetadata {
@@ -134,6 +136,7 @@ export interface Character {
   portrait: string | null;  // Data URL (data:image/...) for reference in image generation
   status: 'active' | 'inactive' | 'deceased';
   metadata: Record<string, unknown> | null;
+  branchId: string | null;  // Branch this character belongs to (null = main/inherited)
 }
 
 export interface Location {
@@ -145,6 +148,7 @@ export interface Location {
   current: boolean;
   connections: string[];
   metadata: Record<string, unknown> | null;
+  branchId: string | null;  // Branch this location belongs to (null = main/inherited)
 }
 
 export interface Item {
@@ -156,6 +160,7 @@ export interface Item {
   equipped: boolean;
   location: string;
   metadata: Record<string, unknown> | null;
+  branchId: string | null;  // Branch this item belongs to (null = main/inherited)
 }
 
 export interface StoryBeat {
@@ -168,6 +173,7 @@ export interface StoryBeat {
   triggeredAt: number | null;
   resolvedAt?: number | null;
   metadata: Record<string, unknown> | null;
+  branchId: string | null;  // Branch this beat belongs to (null = main/inherited)
 }
 
 export interface Template {
@@ -214,6 +220,8 @@ export interface Chapter {
   plotThreads: string[];
   emotionalTone: string | null;
 
+  branchId: string | null;  // Branch this chapter belongs to (null = main branch for legacy)
+
   createdAt: number;
 }
 
@@ -237,7 +245,20 @@ export interface Checkpoint {
   chaptersSnapshot: Chapter[];
   // Optional: undefined means "preserve current time" on restore (for backward compatibility)
   timeTrackerSnapshot?: TimeTracker | null;
+  // Optional: undefined means "preserve current lorebook" on restore (for backward compatibility)
+  lorebookEntriesSnapshot?: Entry[];
 
+  createdAt: number;
+}
+
+// Branch for story branching/alternate timeline support
+export interface Branch {
+  id: string;
+  storyId: string;
+  name: string;
+  parentBranchId: string | null;  // NULL for main branch
+  forkEntryId: string;            // Entry where this branch diverges from parent
+  checkpointId: string | null;    // Checkpoint for world state restoration
   createdAt: number;
 }
 
@@ -283,6 +304,9 @@ export interface Entry {
 
   // Lore management settings
   loreManagementBlacklisted: boolean; // If true, hidden from AI lore management
+
+  // Branch support
+  branchId: string | null;  // Branch this entry belongs to (null = main/inherited)
 }
 
 export interface EntryInjection {
@@ -430,7 +454,7 @@ export interface AgenticSession {
 
 // UI State types
 export type ActivePanel = 'story' | 'library' | 'settings' | 'templates' | 'lorebook' | 'memory';
-export type SidebarTab = 'characters' | 'locations' | 'inventory' | 'quests' | 'time';
+export type SidebarTab = 'characters' | 'locations' | 'inventory' | 'quests' | 'time' | 'branches';
 
 export interface UIState {
   activePanel: ActivePanel;

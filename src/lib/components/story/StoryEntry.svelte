@@ -2,7 +2,7 @@
   import type { StoryEntry, EmbeddedImage } from '$lib/types';
   import { story } from '$lib/stores/story.svelte';
   import { ui } from '$lib/stores/ui.svelte';
-  import { User, BookOpen, Info, Pencil, Trash2, Check, X, RefreshCw, RotateCcw, ImageIcon, Loader2, AlertCircle } from 'lucide-svelte';
+  import { User, BookOpen, Info, Pencil, Trash2, Check, X, RefreshCw, RotateCcw, ImageIcon, Loader2, AlertCircle, GitBranch, Bookmark } from 'lucide-svelte';
   import { parseMarkdown } from '$lib/utils/markdown';
   import { database } from '$lib/services/database';
   import { eventBus, type ImageReadyEvent } from '$lib/services/events';
@@ -103,6 +103,79 @@
   let embeddedImages = $state<EmbeddedImage[]>([]);
   let expandedImageId = $state<string | null>(null);
   let clickedElement = $state<HTMLElement | null>(null);
+
+  // Branching state
+  let isBranching = $state(false);
+  let branchName = $state('');
+
+  // Helper to get which branch a checkpoint belongs to (by checking its last entry's branchId)
+  function getCheckpointBranchId(checkpoint: { entriesSnapshot: { id: string; branchId?: string | null }[]; lastEntryId: string }): string | null {
+    const lastEntry = checkpoint.entriesSnapshot.find(e => e.id === checkpoint.lastEntryId);
+    return lastEntry?.branchId ?? null;
+  }
+
+  // Check if this entry has an associated checkpoint (can be branched from)
+  // Only show checkpoints that belong to the current branch to prevent incorrect branch lineage
+  const currentBranchId = $derived(story.currentStory?.currentBranchId ?? null);
+  const entryCheckpoint = $derived(
+    story.checkpoints.find(cp =>
+      cp.lastEntryId === entry.id && getCheckpointBranchId(cp) === currentBranchId
+    )
+  );
+  const canBranch = $derived(!!entryCheckpoint);
+
+  // Handle creating a branch from this entry
+  async function handleCreateBranch() {
+    if (!branchName.trim()) return;
+    if (!entryCheckpoint) {
+      alert('Cannot branch from this entry - no checkpoint available');
+      return;
+    }
+    try {
+      await story.createBranchFromCheckpoint(branchName.trim(), entry.id, entryCheckpoint.id);
+      isBranching = false;
+      branchName = '';
+    } catch (error) {
+      console.error('[StoryEntry] Failed to create branch:', error);
+      alert(error instanceof Error ? error.message : 'Failed to create branch');
+    }
+  }
+
+  function cancelBranch() {
+    isBranching = false;
+    branchName = '';
+  }
+
+  // Checkpoint creation state
+  let isCreatingCheckpoint = $state(false);
+  let checkpointName = $state('');
+
+  // Check if this is the latest entry (checkpoints can only be created at the latest entry)
+  const isLatestEntry = $derived(
+    story.entries.length > 0 && story.entries[story.entries.length - 1].id === entry.id
+  );
+
+  // Can create checkpoint: latest entry, not a system entry, and no checkpoint exists yet
+  const canCreateCheckpoint = $derived(
+    isLatestEntry && entry.type !== 'system' && !entryCheckpoint
+  );
+
+  async function handleCreateCheckpoint() {
+    if (!checkpointName.trim()) return;
+    try {
+      await story.createCheckpoint(checkpointName.trim());
+      isCreatingCheckpoint = false;
+      checkpointName = '';
+    } catch (error) {
+      console.error('[StoryEntry] Failed to create checkpoint:', error);
+      alert(error instanceof Error ? error.message : 'Failed to create checkpoint');
+    }
+  }
+
+  function cancelCheckpoint() {
+    isCreatingCheckpoint = false;
+    checkpointName = '';
+  }
 
   // Load embedded images for narration entries
   async function loadEmbeddedImages() {
@@ -297,19 +370,24 @@
       return;
     }
 
-    // Check if this is the last user_action entry
-    const isLastUserAction = entry.type === 'user_action' && isLastUserActionEntry();
+    try {
+      // Check if this is the last user_action entry
+      const isLastUserAction = entry.type === 'user_action' && isLastUserActionEntry();
 
-    if (isLastUserAction && ui.retryBackup && story.currentStory && ui.retryBackup.storyId === story.currentStory.id) {
-      // Update the backup with the new content and trigger retry
-      console.log('[StoryEntry] Editing last user action, triggering retry with new content');
-      ui.updateRetryBackupContent(newContent);
-      isEditing = false;
-      await ui.triggerRetryLastMessage();
-    } else {
-      // Normal edit - just update the entry
-      await story.updateEntry(entry.id, newContent);
-      isEditing = false;
+      if (isLastUserAction && ui.retryBackup && story.currentStory && ui.retryBackup.storyId === story.currentStory.id) {
+        // Update the backup with the new content and trigger retry
+        console.log('[StoryEntry] Editing last user action, triggering retry with new content');
+        ui.updateRetryBackupContent(newContent);
+        isEditing = false;
+        await ui.triggerRetryLastMessage();
+      } else {
+        // Normal edit - just update the entry
+        await story.updateEntry(entry.id, newContent);
+        isEditing = false;
+      }
+    } catch (error) {
+      console.error('[StoryEntry] Failed to save edit:', error);
+      alert(error instanceof Error ? error.message : 'Failed to save edit');
     }
   }
 
@@ -332,8 +410,14 @@
   }
 
   async function confirmDelete() {
-    await story.deleteEntry(entry.id);
-    isDeleting = false;
+    try {
+      await story.deleteEntry(entry.id);
+      isDeleting = false;
+    } catch (error) {
+      console.error('[StoryEntry] Failed to delete entry:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete entry');
+      isDeleting = false;
+    }
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -352,7 +436,7 @@
         <Icon class="h-4 w-4 text-surface-400" />
       </div>
       <!-- Edit/Delete buttons below icon (always visible on mobile, hover on desktop) -->
-      {#if !isEditing && !isDeleting && entry.type !== 'system'}
+      {#if !isEditing && !isDeleting && !isBranching && !isCreatingCheckpoint && entry.type !== 'system'}
         <div class="flex flex-col gap-1 sm:opacity-0 transition-opacity group-hover:opacity-100">
           <button
             onclick={startEdit}
@@ -368,6 +452,24 @@
           >
             <Trash2 class="h-3.5 w-3.5" />
           </button>
+          {#if canBranch}
+            <button
+              onclick={() => isBranching = true}
+              class="rounded p-1.5 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+              title="Branch from here (checkpoint available)"
+            >
+              <GitBranch class="h-3.5 w-3.5" />
+            </button>
+          {/if}
+          {#if canCreateCheckpoint}
+            <button
+              onclick={() => isCreatingCheckpoint = true}
+              class="rounded p-1.5 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 min-h-[32px] min-w-[32px] sm:min-h-0 sm:min-w-0 flex items-center justify-center"
+              title="Create checkpoint here (for branching)"
+            >
+              <Bookmark class="h-3.5 w-3.5" />
+            </button>
+          {/if}
         </div>
       {/if}
     </div>
@@ -421,6 +523,70 @@
               Cancel
             </button>
           </div>
+        </div>
+      {:else if isBranching}
+        <div class="space-y-2">
+          <p class="text-sm text-surface-300">Create a branch from this point:</p>
+          <input
+            type="text"
+            class="input w-full text-sm"
+            placeholder="Branch name..."
+            bind:value={branchName}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') handleCreateBranch();
+              if (e.key === 'Escape') cancelBranch();
+            }}
+          />
+          <div class="flex gap-2">
+            <button
+              onclick={handleCreateBranch}
+              disabled={!branchName.trim()}
+              class="btn flex items-center gap-1.5 text-sm bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 min-h-[40px] px-3"
+            >
+              <GitBranch class="h-4 w-4" />
+              Create Branch
+            </button>
+            <button
+              onclick={cancelBranch}
+              class="btn btn-secondary flex items-center gap-1.5 text-sm min-h-[40px] px-3"
+            >
+              <X class="h-4 w-4" />
+              Cancel
+            </button>
+          </div>
+          <p class="text-xs text-surface-500">This will create a new timeline from this checkpoint.</p>
+        </div>
+      {:else if isCreatingCheckpoint}
+        <div class="space-y-2">
+          <p class="text-sm text-surface-300">Create a checkpoint at this point:</p>
+          <input
+            type="text"
+            class="input w-full text-sm"
+            placeholder="Checkpoint name..."
+            bind:value={checkpointName}
+            onkeydown={(e) => {
+              if (e.key === 'Enter') handleCreateCheckpoint();
+              if (e.key === 'Escape') cancelCheckpoint();
+            }}
+          />
+          <div class="flex gap-2">
+            <button
+              onclick={handleCreateCheckpoint}
+              disabled={!checkpointName.trim()}
+              class="btn flex items-center gap-1.5 text-sm bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 disabled:opacity-50 min-h-[40px] px-3"
+            >
+              <Bookmark class="h-4 w-4" />
+              Create Checkpoint
+            </button>
+            <button
+              onclick={cancelCheckpoint}
+              class="btn btn-secondary flex items-center gap-1.5 text-sm min-h-[40px] px-3"
+            >
+              <X class="h-4 w-4" />
+              Cancel
+            </button>
+          </div>
+          <p class="text-xs text-surface-500">Checkpoints save the current story state and allow branching from this point.</p>
         </div>
       {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->

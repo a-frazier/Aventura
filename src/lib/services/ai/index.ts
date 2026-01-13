@@ -677,6 +677,7 @@ class AIService {
    */
   async runLoreManagement(
     storyId: string,
+    branchId: string | null,
     entries: Entry[],
     recentMessages: StoryEntry[],
     chapters: Chapter[],
@@ -693,6 +694,7 @@ class AIService {
   ): Promise<LoreManagementResult> {
     log('runLoreManagement called', {
       storyId,
+      branchId,
       entriesCount: entries.length,
       recentMessagesCount: recentMessages.length,
       chaptersCount: chapters.length,
@@ -703,6 +705,7 @@ class AIService {
 
     return await loreManager.runSession({
       storyId,
+      branchId,
       entries,
       recentMessages,
       chapters,

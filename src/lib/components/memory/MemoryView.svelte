@@ -39,6 +39,7 @@
     try {
       const result = await aiService.runLoreManagement(
         story.currentStory.id,
+        story.currentStory.currentBranchId,
         [...story.lorebookEntries],
         [],
         story.chapters,
