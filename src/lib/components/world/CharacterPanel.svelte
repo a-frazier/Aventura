@@ -1,7 +1,8 @@
 <script lang="ts">
   import { story } from '$lib/stores/story.svelte';
   import { settings } from '$lib/stores/settings.svelte';
-  import { Plus, User, Skull, UserX, Pencil, Trash2, Star, ImageUp, Wand2, X, Loader2, ChevronDown, ChevronUp } from 'lucide-svelte';
+  import { characterVault } from '$lib/stores/characterVault.svelte';
+  import { Plus, User, Skull, UserX, Pencil, Trash2, Star, ImageUp, Wand2, X, Loader2, ChevronDown, ChevronUp, Archive } from 'lucide-svelte';
   import type { Character } from '$lib/types';
   import { NanoGPTImageProvider } from '$lib/services/ai/nanoGPTImageProvider';
   import { promptService } from '$lib/services/prompts';
@@ -30,6 +31,7 @@
   let portraitError = $state<string | null>(null);
   let editPortrait = $state<string | null>(null);
   let expandedPortrait = $state<{ src: string; name: string } | null>(null);
+  let savedToVaultId = $state<string | null>(null);
   const currentProtagonistName = $derived.by(() => (
     story.characters.find(c => c.relationship === 'self')?.name ?? 'current'
   ));
@@ -41,6 +43,25 @@
     newDescription = '';
     newRelationship = '';
     showAddForm = false;
+  }
+
+  async function saveCharacterToVault(character: Character) {
+    if (!story.currentStory) return;
+
+    // Ensure vault is loaded
+    if (!characterVault.isLoaded) {
+      await characterVault.load();
+    }
+
+    const isProtagonist = character.relationship === 'self';
+    await characterVault.saveFromStory(
+      character,
+      isProtagonist ? 'protagonist' : 'supporting',
+      story.currentStory.id
+    );
+
+    savedToVaultId = character.id;
+    setTimeout(() => savedToVaultId = null, 2000);
   }
 
   function startEdit(character: Character) {
@@ -430,6 +451,13 @@
                     <Star class="h-3.5 w-3.5" />
                   </button>
                 {/if}
+                <button
+                  class="btn-ghost rounded p-1.5 sm:p-1 {savedToVaultId === character.id ? 'text-green-400' : 'text-surface-500 hover:text-accent-400'}"
+                  onclick={() => saveCharacterToVault(character)}
+                  title={savedToVaultId === character.id ? 'Saved!' : 'Save to vault'}
+                >
+                  <Archive class="h-3.5 w-3.5" />
+                </button>
                 <button
                   class="btn-ghost rounded p-1.5 text-surface-500 hover:text-surface-200 sm:p-1"
                   onclick={() => startEdit(character)}

@@ -141,6 +141,49 @@ export interface Character {
   branchId: string | null;  // Branch this character belongs to (null = main/inherited)
 }
 
+// ===== Character Vault Types =====
+
+export type VaultCharacterType = 'protagonist' | 'supporting';
+export type VaultCharacterSource = 'manual' | 'import' | 'story';
+
+/**
+ * A reusable character template stored in the global vault.
+ * Characters are copied to stories, not linked.
+ */
+export interface VaultCharacter {
+  id: string;
+  name: string;
+  description: string | null;
+
+  // Type determines which fields are relevant
+  characterType: VaultCharacterType;
+
+  // Protagonist-specific fields
+  background: string | null;   // Backstory for protagonist wizard step
+  motivation: string | null;   // Goals/drives for protagonist wizard step
+
+  // Supporting-specific fields
+  role: string | null;         // e.g., "Mentor", "Rival", "Love Interest"
+  relationshipTemplate: string | null;  // Default relationship when added
+
+  // Common fields (same as Character)
+  traits: string[];
+  visualDescriptors: string[];
+  portrait: string | null;  // Data URL
+
+  // Organization
+  tags: string[];
+  favorite: boolean;
+
+  // Provenance
+  source: VaultCharacterSource;
+  originalStoryId: string | null;  // If saved from a story
+  metadata: Record<string, unknown> | null;
+
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Location {
   id: string;
   storyId: string;
@@ -455,7 +498,7 @@ export interface AgenticSession {
 }
 
 // UI State types
-export type ActivePanel = 'story' | 'library' | 'settings' | 'templates' | 'lorebook' | 'memory';
+export type ActivePanel = 'story' | 'library' | 'settings' | 'templates' | 'lorebook' | 'memory' | 'character-vault';
 export type SidebarTab = 'characters' | 'locations' | 'inventory' | 'quests' | 'time' | 'branches';
 
 export interface UIState {

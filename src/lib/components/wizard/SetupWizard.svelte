@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { story } from '$lib/stores/story.svelte';
-  import { ui } from '$lib/stores/ui.svelte';
-  import { settings } from '$lib/stores/settings.svelte';
+  import { story } from "$lib/stores/story.svelte";
+  import { ui } from "$lib/stores/ui.svelte";
+  import { settings } from "$lib/stores/settings.svelte";
+  import { characterVault } from "$lib/stores/characterVault.svelte";
   import {
     scenarioService,
     type WizardData,
@@ -11,23 +12,24 @@
     type GeneratedCharacter,
     type GeneratedOpening,
     type Tense,
-  } from '$lib/services/ai/scenario';
-import {
+  } from "$lib/services/ai/scenario";
+  import {
     parseSillyTavernLorebook,
     classifyEntriesWithLLM,
     getImportSummary,
     type ImportedEntry,
     type LorebookImportResult,
-  } from '$lib/services/lorebookImporter';
+  } from "$lib/services/lorebookImporter";
   import {
     convertCardToScenario,
     readCharacterCardFile,
     type CardImportResult,
-  } from '$lib/services/characterCardImporter';
-  import { NanoGPTImageProvider } from '$lib/services/ai/nanoGPTImageProvider';
-  import { promptService } from '$lib/services/prompts';
-  import { normalizeImageDataUrl } from '$lib/utils/image';
-  import type { StoryMode, POV, EntryType } from '$lib/types';
+  } from "$lib/services/characterCardImporter";
+  import { NanoGPTImageProvider } from "$lib/services/ai/nanoGPTImageProvider";
+  import { promptService } from "$lib/services/prompts";
+  import { normalizeImageDataUrl } from "$lib/utils/image";
+  import type { StoryMode, POV, EntryType, VaultCharacter } from "$lib/types";
+  import VaultCharacterPicker from "$lib/components/vault/VaultCharacterPicker.svelte";
   import {
     X,
     ChevronLeft,
@@ -57,7 +59,8 @@ import {
     Plus,
     ImageIcon,
     ImageUp,
-  } from 'lucide-svelte';
+    Archive,
+  } from "lucide-svelte";
 
   interface Props {
     onClose: () => void;
@@ -70,14 +73,14 @@ import {
   const totalSteps = 8;
 
   // Step 1: Mode
-  let selectedMode = $state<StoryMode>('adventure');
+  let selectedMode = $state<StoryMode>("adventure");
 
   // Step 2: Genre
-  let selectedGenre = $state<Genre>('fantasy');
-  let customGenre = $state('');
+  let selectedGenre = $state<Genre>("fantasy");
+  let customGenre = $state("");
 
   // Step 3: Setting
-  let settingSeed = $state('');
+  let settingSeed = $state("");
   let expandedSetting = $state<ExpandedSetting | null>(null);
   let isExpandingSetting = $state(false);
   let settingError = $state<string | null>(null);
@@ -91,25 +94,30 @@ import {
   let protagonistError = $state<string | null>(null);
 
   // Manual character input
-  let manualCharacterName = $state('');
-  let manualCharacterDescription = $state('');
-  let manualCharacterBackground = $state('');
-  let manualCharacterMotivation = $state('');
-  let manualCharacterTraits = $state('');
+  let manualCharacterName = $state("");
+  let manualCharacterDescription = $state("");
+  let manualCharacterBackground = $state("");
+  let manualCharacterMotivation = $state("");
+  let manualCharacterTraits = $state("");
   let showManualInput = $state(true); // Show manual input by default
 
   // Supporting character input
   let showSupportingCharacterForm = $state(false);
   let editingSupportingCharacterIndex = $state<number | null>(null);
-  let supportingCharacterName = $state('');
-  let supportingCharacterRole = $state('');
-  let supportingCharacterDescription = $state('');
-  let supportingCharacterRelationship = $state('');
-  let supportingCharacterTraits = $state('');
+  let supportingCharacterName = $state("");
+  let supportingCharacterRole = $state("");
+  let supportingCharacterDescription = $state("");
+  let supportingCharacterRelationship = $state("");
+  let supportingCharacterTraits = $state("");
   let isElaboratingSupportingCharacter = $state(false);
 
+  // Character Vault integration
+  let showProtagonistVaultPicker = $state(false);
+  let showSupportingVaultPicker = $state(false);
+  let savedToVaultConfirm = $state(false);
+
   // Step 7: Portraits
-  let protagonistVisualDescriptors = $state('');
+  let protagonistVisualDescriptors = $state("");
   let protagonistPortrait = $state<string | null>(null);
   let isGeneratingProtagonistPortrait = $state(false);
   let portraitError = $state<string | null>(null);
@@ -139,16 +147,16 @@ import {
   let cardImportedAlternateGreetings = $state<string[]>([]);
   let selectedGreetingIndex = $state<number>(0); // 0 = first_mes, 1+ = alternate greetings
 
-// Step 6: Writing Style
-  let selectedPOV = $state<POV>('first');
-  let selectedTense = $state<Tense>('present');
-  let tone = $state('immersive and engaging');
+  // Step 6: Writing Style
+  let selectedPOV = $state<POV>("first");
+  let selectedTense = $state<Tense>("present");
+  let tone = $state("immersive and engaging");
   let visualProseMode = $state(false);
   let inlineImageMode = $state(false);
 
   // Step 7: Generate Opening
-  let storyTitle = $state('');
-  let openingGuidance = $state(''); // Creative writing mode: user guidance for opening scene
+  let storyTitle = $state("");
+  let openingGuidance = $state(""); // Creative writing mode: user guidance for opening scene
   let generatedOpening = $state<GeneratedOpening | null>(null);
   let isGeneratingOpening = $state(false);
   let openingError = $state<string | null>(null);
@@ -157,73 +165,136 @@ import {
   const needsApiKey = $derived(settings.needsApiKey);
 
   // Genre options with icons
-  const genres: { id: Genre; name: string; icon: typeof Wand2; description: string }[] = [
-    { id: 'fantasy', name: 'Fantasy', icon: Wand2, description: 'Magic, quests, and mythical creatures' },
-    { id: 'scifi', name: 'Sci-Fi', icon: Rocket, description: 'Space, technology, and the future' },
-    { id: 'modern', name: 'Modern', icon: Building, description: 'Contemporary realistic settings' },
-    { id: 'horror', name: 'Horror', icon: Skull, description: 'Fear, suspense, and the unknown' },
-    { id: 'mystery', name: 'Mystery', icon: Search, description: 'Puzzles, clues, and investigations' },
-    { id: 'romance', name: 'Romance', icon: Heart, description: 'Love, relationships, and emotion' },
-    { id: 'custom', name: 'Custom', icon: Sparkles, description: 'Define your own genre' },
+  const genres: {
+    id: Genre;
+    name: string;
+    icon: typeof Wand2;
+    description: string;
+  }[] = [
+    {
+      id: "fantasy",
+      name: "Fantasy",
+      icon: Wand2,
+      description: "Magic, quests, and mythical creatures",
+    },
+    {
+      id: "scifi",
+      name: "Sci-Fi",
+      icon: Rocket,
+      description: "Space, technology, and the future",
+    },
+    {
+      id: "modern",
+      name: "Modern",
+      icon: Building,
+      description: "Contemporary realistic settings",
+    },
+    {
+      id: "horror",
+      name: "Horror",
+      icon: Skull,
+      description: "Fear, suspense, and the unknown",
+    },
+    {
+      id: "mystery",
+      name: "Mystery",
+      icon: Search,
+      description: "Puzzles, clues, and investigations",
+    },
+    {
+      id: "romance",
+      name: "Romance",
+      icon: Heart,
+      description: "Love, relationships, and emotion",
+    },
+    {
+      id: "custom",
+      name: "Custom",
+      icon: Sparkles,
+      description: "Define your own genre",
+    },
   ];
 
   // POV options
-  const povOptions = $derived.by((): { id: POV; label: string; example: string }[] => {
-    return [
-      { id: 'first', label: '1st Person', example: 'I walk into the room...' },
-      { id: 'second', label: '2nd Person', example: 'You walk into the room...' },
-      { id: 'third', label: '3rd Person', example: 'They walk into the room...' },
-    ];
-  });
+  const povOptions = $derived.by(
+    (): { id: POV; label: string; example: string }[] => {
+      return [
+        {
+          id: "first",
+          label: "1st Person",
+          example: "I walk into the room...",
+        },
+        {
+          id: "second",
+          label: "2nd Person",
+          example: "You walk into the room...",
+        },
+        {
+          id: "third",
+          label: "3rd Person",
+          example: "They walk into the room...",
+        },
+      ];
+    },
+  );
 
   // Tense options
   const tenseOptions: { id: Tense; label: string; example: string }[] = [
-    { id: 'present', label: 'Present', example: 'You see a door.' },
-    { id: 'past', label: 'Past', example: 'You saw a door.' },
+    { id: "present", label: "Present", example: "You see a door." },
+    { id: "past", label: "Past", example: "You saw a door." },
   ];
 
   // Tone presets
   const tonePresets = [
-    'Immersive and engaging',
-    'Dark and atmospheric',
-    'Light and whimsical',
-    'Gritty and realistic',
-    'Poetic and lyrical',
-    'Action-packed and fast-paced',
+    "Immersive and engaging",
+    "Dark and atmospheric",
+    "Light and whimsical",
+    "Gritty and realistic",
+    "Poetic and lyrical",
+    "Action-packed and fast-paced",
   ];
 
   // Update default POV and tense when mode changes
   // Creative writing: third person, past tense (literary standard) - but user can override POV
   // Adventure: first person, present tense (immersive)
   $effect(() => {
-    if (selectedMode === 'creative-writing') {
+    if (selectedMode === "creative-writing") {
       // Only set defaults if not already set (allow user to override POV)
-      if (selectedPOV === 'first' || selectedPOV === 'second') {
+      if (selectedPOV === "first" || selectedPOV === "second") {
         // Keep user's POV choice, only set tense
-        selectedTense = 'past';
+        selectedTense = "past";
       } else {
         // First time or was third, set both defaults
-        selectedPOV = 'third';
-        selectedTense = 'past';
+        selectedPOV = "third";
+        selectedTense = "past";
       }
     } else {
-      selectedPOV = 'first';
-      selectedTense = 'present';
+      selectedPOV = "first";
+      selectedTense = "present";
     }
   });
 
   // Step validation
   function canProceed(): boolean {
     switch (currentStep) {
-      case 1: return true; // Mode always selected
-      case 2: return true; // Import is optional (can skip)
-      case 3: return selectedGenre !== 'custom' || customGenre.trim().length > 0;
-      case 4: return settingSeed.trim().length > 0;
-      case 5: return true; // Protagonist is optional
-      case 6: return true; // Portraits are optional
-      case 7: return true; // Style always has defaults
-      case 8: return storyTitle.trim().length > 0;
-      default: return false;
+      case 1:
+        return true; // Mode always selected
+      case 2:
+        return true; // Import is optional (can skip)
+      case 3:
+        return selectedGenre !== "custom" || customGenre.trim().length > 0;
+      case 4:
+        return settingSeed.trim().length > 0;
+      case 5:
+        return true; // Protagonist is optional
+      case 6:
+        return true; // Portraits are optional
+      case 7:
+        return true; // Style always has defaults
+      case 8:
+        return storyTitle.trim().length > 0;
+      default:
+        return false;
     }
   }
 
@@ -246,10 +317,10 @@ import {
 
     // Create a minimal expanded setting from the seed text
     expandedSetting = {
-      name: settingSeed.split('.')[0].trim().slice(0, 50) || 'Custom Setting',
+      name: settingSeed.split(".")[0].trim().slice(0, 50) || "Custom Setting",
       description: settingSeed.trim(),
       keyLocations: [],
-      atmosphere: '',
+      atmosphere: "",
       themes: [],
       potentialConflicts: [],
     };
@@ -265,26 +336,28 @@ import {
     try {
       // Prepare lorebook entries for setting expansion context
       // Include ALL entries with full descriptions to avoid hallucinating contradictory details
-      const lorebookContext = importedEntries.length > 0
-        ? importedEntries.map(e => ({
-            name: e.name,
-            type: e.type,
-            description: e.description,
-            // hiddenInfo not available in SillyTavern imports, but included if present
-            hiddenInfo: undefined,
-          }))
-        : undefined;
+      const lorebookContext =
+        importedEntries.length > 0
+          ? importedEntries.map((e) => ({
+              name: e.name,
+              type: e.type,
+              description: e.description,
+              // hiddenInfo not available in SillyTavern imports, but included if present
+              hiddenInfo: undefined,
+            }))
+          : undefined;
 
       expandedSetting = await scenarioService.expandSetting(
         settingSeed,
         selectedGenre,
         customGenre || undefined,
         settings.wizardSettings.settingExpansion,
-        lorebookContext
+        lorebookContext,
       );
     } catch (error) {
-      console.error('Failed to expand setting:', error);
-      settingError = error instanceof Error ? error.message : 'Failed to expand setting';
+      console.error("Failed to expand setting:", error);
+      settingError =
+        error instanceof Error ? error.message : "Failed to expand setting";
     } finally {
       isExpandingSetting = false;
     }
@@ -304,11 +377,14 @@ import {
         selectedMode,
         selectedPOV,
         customGenre || undefined,
-        settings.wizardSettings.protagonistGeneration
+        settings.wizardSettings.protagonistGeneration,
       );
     } catch (error) {
-      console.error('Failed to generate protagonist:', error);
-      protagonistError = error instanceof Error ? error.message : 'Failed to generate protagonist';
+      console.error("Failed to generate protagonist:", error);
+      protagonistError =
+        error instanceof Error
+          ? error.message
+          : "Failed to generate protagonist";
     } finally {
       isGeneratingProtagonist = false;
     }
@@ -320,14 +396,91 @@ import {
 
     protagonist = {
       name: manualCharacterName.trim(),
-      description: manualCharacterDescription.trim() || 'A mysterious figure.',
-      background: manualCharacterBackground.trim() || '',
-      motivation: manualCharacterMotivation.trim() || '',
+      description: manualCharacterDescription.trim() || "A mysterious figure.",
+      background: manualCharacterBackground.trim() || "",
+      motivation: manualCharacterMotivation.trim() || "",
       traits: manualCharacterTraits.trim()
-        ? manualCharacterTraits.split(',').map(t => t.trim()).filter(Boolean)
+        ? manualCharacterTraits
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
         : [],
     };
     showManualInput = false;
+  }
+
+  // Step 4: Select protagonist from vault
+  function handleSelectProtagonistFromVault(vaultCharacter: VaultCharacter) {
+    // Populate form fields from vault character
+    manualCharacterName = vaultCharacter.name;
+    manualCharacterDescription = vaultCharacter.description || "";
+    manualCharacterBackground = vaultCharacter.background || "";
+    manualCharacterMotivation = vaultCharacter.motivation || "";
+    manualCharacterTraits = vaultCharacter.traits.join(", ");
+
+    // Also set portrait data for step 7
+    protagonistVisualDescriptors = vaultCharacter.visualDescriptors.join(", ");
+    protagonistPortrait = vaultCharacter.portrait;
+
+    showProtagonistVaultPicker = false;
+    showManualInput = true;
+
+    // Use as-is after selecting from vault
+    useManualCharacter();
+  }
+
+  // Step 4: Save protagonist to vault
+  async function handleSaveProtagonistToVault() {
+    if (!manualCharacterName.trim()) return;
+
+    // Ensure vault is loaded
+    if (!characterVault.isLoaded) {
+      await characterVault.load();
+    }
+
+    await characterVault.add({
+      name: manualCharacterName.trim(),
+      description: manualCharacterDescription.trim() || null,
+      characterType: "protagonist",
+      background: manualCharacterBackground.trim() || null,
+      motivation: manualCharacterMotivation.trim() || null,
+      role: null,
+      relationshipTemplate: null,
+      traits: manualCharacterTraits
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      visualDescriptors: protagonistVisualDescriptors
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean),
+      portrait: protagonistPortrait,
+      tags: [],
+      favorite: false,
+      source: "manual",
+      originalStoryId: null,
+      metadata: null,
+    });
+
+    savedToVaultConfirm = true;
+    setTimeout(() => (savedToVaultConfirm = false), 2000);
+  }
+
+  // Step 4: Select supporting character from vault
+  function handleSelectSupportingFromVault(vaultCharacter: VaultCharacter) {
+    supportingCharacterName = vaultCharacter.name;
+    supportingCharacterRole = vaultCharacter.role || "";
+    supportingCharacterDescription = vaultCharacter.description || "";
+    supportingCharacterRelationship = vaultCharacter.relationshipTemplate || "";
+    supportingCharacterTraits = vaultCharacter.traits.join(", ");
+
+    // Visual data for step 7
+    supportingCharacterVisualDescriptors[vaultCharacter.name] =
+      vaultCharacter.visualDescriptors.join(", ");
+    supportingCharacterPortraits[vaultCharacter.name] = vaultCharacter.portrait;
+
+    showSupportingVaultPicker = false;
+    showSupportingCharacterForm = true;
   }
 
   // Step 4: Elaborate on manual character input with AI
@@ -335,13 +488,15 @@ import {
     if (isElaboratingCharacter) return;
 
     // Need at least a name or some input
-    const hasInput = manualCharacterName.trim() ||
+    const hasInput =
+      manualCharacterName.trim() ||
       manualCharacterDescription.trim() ||
       manualCharacterBackground.trim() ||
       manualCharacterMotivation.trim();
 
     if (!hasInput) {
-      protagonistError = 'Please enter at least some character details to elaborate on.';
+      protagonistError =
+        "Please enter at least some character details to elaborate on.";
       return;
     }
 
@@ -356,18 +511,24 @@ import {
           background: manualCharacterBackground.trim() || undefined,
           motivation: manualCharacterMotivation.trim() || undefined,
           traits: manualCharacterTraits.trim()
-            ? manualCharacterTraits.split(',').map(t => t.trim()).filter(Boolean)
+            ? manualCharacterTraits
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
             : undefined,
         },
         expandedSetting,
         selectedGenre,
         customGenre || undefined,
-        settings.wizardSettings.characterElaboration
+        settings.wizardSettings.characterElaboration,
       );
       showManualInput = false;
     } catch (error) {
-      console.error('Failed to elaborate character:', error);
-      protagonistError = error instanceof Error ? error.message : 'Failed to elaborate character';
+      console.error("Failed to elaborate character:", error);
+      protagonistError =
+        error instanceof Error
+          ? error.message
+          : "Failed to elaborate character";
     } finally {
       isElaboratingCharacter = false;
     }
@@ -376,11 +537,11 @@ import {
   // Step 4: Edit the generated character (switch back to manual input)
   function editCharacter() {
     if (protagonist) {
-      manualCharacterName = protagonist.name || '';
-      manualCharacterDescription = protagonist.description || '';
-      manualCharacterBackground = protagonist.background || '';
-      manualCharacterMotivation = protagonist.motivation || '';
-      manualCharacterTraits = protagonist.traits?.join(', ') || '';
+      manualCharacterName = protagonist.name || "";
+      manualCharacterDescription = protagonist.description || "";
+      manualCharacterBackground = protagonist.background || "";
+      manualCharacterMotivation = protagonist.motivation || "";
+      manualCharacterTraits = protagonist.traits?.join(", ") || "";
     }
     showManualInput = true;
     protagonist = null;
@@ -399,10 +560,10 @@ import {
         selectedGenre,
         3,
         customGenre || undefined,
-        settings.wizardSettings.supportingCharacters
+        settings.wizardSettings.supportingCharacters,
       );
     } catch (error) {
-      console.error('Failed to generate characters:', error);
+      console.error("Failed to generate characters:", error);
     } finally {
       isGeneratingCharacters = false;
     }
@@ -411,11 +572,11 @@ import {
   // Supporting character form management
   function openSupportingCharacterForm() {
     editingSupportingCharacterIndex = null;
-    supportingCharacterName = '';
-    supportingCharacterRole = '';
-    supportingCharacterDescription = '';
-    supportingCharacterRelationship = '';
-    supportingCharacterTraits = '';
+    supportingCharacterName = "";
+    supportingCharacterRole = "";
+    supportingCharacterDescription = "";
+    supportingCharacterRelationship = "";
+    supportingCharacterTraits = "";
     showSupportingCharacterForm = true;
   }
 
@@ -426,18 +587,18 @@ import {
     supportingCharacterRole = char.role;
     supportingCharacterDescription = char.description;
     supportingCharacterRelationship = char.relationship;
-    supportingCharacterTraits = char.traits?.join(', ') || '';
+    supportingCharacterTraits = char.traits?.join(", ") || "";
     showSupportingCharacterForm = true;
   }
 
   function cancelSupportingCharacterForm() {
     showSupportingCharacterForm = false;
     editingSupportingCharacterIndex = null;
-    supportingCharacterName = '';
-    supportingCharacterRole = '';
-    supportingCharacterDescription = '';
-    supportingCharacterRelationship = '';
-    supportingCharacterTraits = '';
+    supportingCharacterName = "";
+    supportingCharacterRole = "";
+    supportingCharacterDescription = "";
+    supportingCharacterRelationship = "";
+    supportingCharacterTraits = "";
   }
 
   function useSupportingCharacterAsIs() {
@@ -445,11 +606,14 @@ import {
 
     const newChar: GeneratedCharacter = {
       name: supportingCharacterName.trim(),
-      role: supportingCharacterRole.trim() || 'supporting',
-      description: supportingCharacterDescription.trim() || '',
-      relationship: supportingCharacterRelationship.trim() || '',
+      role: supportingCharacterRole.trim() || "supporting",
+      description: supportingCharacterDescription.trim() || "",
+      relationship: supportingCharacterRelationship.trim() || "",
       traits: supportingCharacterTraits.trim()
-        ? supportingCharacterTraits.split(',').map(t => t.trim()).filter(Boolean)
+        ? supportingCharacterTraits
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
         : [],
     };
 
@@ -466,7 +630,8 @@ import {
   async function elaborateSupportingCharacter() {
     if (isElaboratingSupportingCharacter) return;
 
-    const hasInput = supportingCharacterName.trim() ||
+    const hasInput =
+      supportingCharacterName.trim() ||
       supportingCharacterDescription.trim() ||
       supportingCharacterRelationship.trim();
 
@@ -483,21 +648,25 @@ import {
           background: supportingCharacterRelationship.trim() || undefined, // Use relationship as background context
           motivation: supportingCharacterRole.trim() || undefined, // Use role as motivation context
           traits: supportingCharacterTraits.trim()
-            ? supportingCharacterTraits.split(',').map(t => t.trim()).filter(Boolean)
+            ? supportingCharacterTraits
+                .split(",")
+                .map((t) => t.trim())
+                .filter(Boolean)
             : undefined,
         },
         expandedSetting,
         selectedGenre,
         customGenre || undefined,
-        settings.wizardSettings.characterElaboration
+        settings.wizardSettings.characterElaboration,
       );
 
       // Convert elaborated protagonist format to supporting character format
       const newChar: GeneratedCharacter = {
         name: elaborated.name,
-        role: supportingCharacterRole.trim() || 'supporting',
+        role: supportingCharacterRole.trim() || "supporting",
         description: elaborated.description,
-        relationship: supportingCharacterRelationship.trim() || elaborated.background || '',
+        relationship:
+          supportingCharacterRelationship.trim() || elaborated.background || "",
         traits: elaborated.traits || [],
       };
 
@@ -510,7 +679,7 @@ import {
 
       cancelSupportingCharacterForm();
     } catch (error) {
-      console.error('Failed to elaborate supporting character:', error);
+      console.error("Failed to elaborate supporting character:", error);
     } finally {
       isElaboratingSupportingCharacter = false;
     }
@@ -534,36 +703,42 @@ import {
       settingSeed,
       expandedSetting: expandedSetting || undefined,
       protagonist: protagonist || undefined,
-      characters: supportingCharacters.length > 0 ? supportingCharacters : undefined,
+      characters:
+        supportingCharacters.length > 0 ? supportingCharacters : undefined,
       writingStyle: {
         pov: selectedPOV,
         tense: selectedTense,
         tone,
       },
       title: storyTitle,
-      openingGuidance: selectedMode === 'creative-writing' && openingGuidance.trim() ? openingGuidance.trim() : undefined,
+      openingGuidance:
+        selectedMode === "creative-writing" && openingGuidance.trim()
+          ? openingGuidance.trim()
+          : undefined,
     };
 
     // Prepare lorebook entries for opening generation context
     // Include ALL entries with full descriptions to avoid hallucinating contradictory details
-    const lorebookContext = importedEntries.length > 0
-      ? importedEntries.map(e => ({
-          name: e.name,
-          type: e.type,
-          description: e.description,
-          hiddenInfo: undefined,
-        }))
-      : undefined;
+    const lorebookContext =
+      importedEntries.length > 0
+        ? importedEntries.map((e) => ({
+            name: e.name,
+            type: e.type,
+            description: e.description,
+            hiddenInfo: undefined,
+          }))
+        : undefined;
 
     try {
       generatedOpening = await scenarioService.generateOpening(
         wizardData,
         settings.wizardSettings.openingGeneration,
-        lorebookContext
+        lorebookContext,
       );
     } catch (error) {
-      console.error('Failed to generate opening:', error);
-      openingError = error instanceof Error ? error.message : 'Failed to generate opening';
+      console.error("Failed to generate opening:", error);
+      openingError =
+        error instanceof Error ? error.message : "Failed to generate opening";
     } finally {
       isGeneratingOpening = false;
     }
@@ -574,12 +749,12 @@ import {
     // Sanity checks
     if (!storyTitle.trim()) return;
     if (!generatedOpening) {
-      openingError = 'Please generate an opening scene first';
+      openingError = "Please generate an opening scene first";
       return;
     }
 
     // Get protagonist name for {{user}} replacement
-    const protagonistName = protagonist?.name || 'the protagonist';
+    const protagonistName = protagonist?.name || "the protagonist";
 
     // Replace {{user}} placeholders in the opening scene
     const processedOpening = {
@@ -587,15 +762,16 @@ import {
       scene: generatedOpening.scene.replace(/\{\{user\}\}/gi, protagonistName),
     };
 
-const wizardData: WizardData = {
+    const wizardData: WizardData = {
       mode: selectedMode,
       genre: selectedGenre,
       customGenre: customGenre || undefined,
       settingSeed: settingSeed.replace(/\{\{user\}\}/gi, protagonistName),
       expandedSetting: expandedSetting || undefined,
       protagonist: protagonist || undefined,
-      characters: supportingCharacters.length > 0 ? supportingCharacters : undefined,
-writingStyle: {
+      characters:
+        supportingCharacters.length > 0 ? supportingCharacters : undefined,
+      writingStyle: {
         pov: selectedPOV,
         tense: selectedTense,
         tone,
@@ -603,27 +779,42 @@ writingStyle: {
         inlineImageMode,
       },
       title: storyTitle,
-      openingGuidance: selectedMode === 'creative-writing' && openingGuidance.trim() ? openingGuidance.trim() : undefined,
+      openingGuidance:
+        selectedMode === "creative-writing" && openingGuidance.trim()
+          ? openingGuidance.trim()
+          : undefined,
     };
 
     // Prepare story data
-    const storyData = scenarioService.prepareStoryData(wizardData, processedOpening);
+    const storyData = scenarioService.prepareStoryData(
+      wizardData,
+      processedOpening,
+    );
 
     // Add portraits and visual descriptors to protagonist
     if (storyData.protagonist) {
       storyData.protagonist.portrait = protagonistPortrait ?? undefined;
       storyData.protagonist.visualDescriptors = protagonistVisualDescriptors
-        ? protagonistVisualDescriptors.split(',').map(d => d.trim()).filter(Boolean)
+        ? protagonistVisualDescriptors
+            .split(",")
+            .map((d) => d.trim())
+            .filter(Boolean)
         : [];
     }
 
     // Add portraits and visual descriptors to supporting characters (keyed by name)
     storyData.characters = storyData.characters.map((char) => ({
       ...char,
-      portrait: supportingCharacterPortraits[char.name] ?? undefined,
-      visualDescriptors: supportingCharacterVisualDescriptors[char.name]
-        ? supportingCharacterVisualDescriptors[char.name].split(',').map(d => d.trim()).filter(Boolean)
-        : [],
+      portrait: char.name
+        ? (supportingCharacterPortraits[char.name] ?? undefined)
+        : undefined,
+      visualDescriptors:
+        char.name && supportingCharacterVisualDescriptors[char.name]
+          ? supportingCharacterVisualDescriptors[char.name]
+              .split(",")
+              .map((d) => d.trim())
+              .filter(Boolean)
+          : [],
     }));
 
     // Create the story using the store, including any imported entries
@@ -634,20 +825,20 @@ writingStyle: {
 
     // Load and navigate to the story
     await story.loadStory(newStory.id);
-    ui.setActivePanel('story');
+    ui.setActivePanel("story");
     onClose();
   }
 
   // Step title
   const stepTitles = [
-    'Choose Your Mode',
-    'Import Lorebook (Optional)',
-    'Select a Genre',
-    'Describe Your Setting',
-    'Create Your Character',
-    'Character Portraits (Optional)',
-    'Writing Style',
-    'Generate Opening',
+    "Choose Your Mode",
+    "Import Lorebook (Optional)",
+    "Select a Genre",
+    "Describe Your Setting",
+    "Create Your Character",
+    "Character Portraits (Optional)",
+    "Writing Style",
+    "Generate Opening",
   ];
 
   // Portrait generation functions
@@ -656,13 +847,13 @@ writingStyle: {
 
     const imageSettings = settings.systemServicesSettings.imageGeneration;
     if (!imageSettings.nanoGptApiKey) {
-      portraitError = 'NanoGPT API key required for portrait generation';
+      portraitError = "NanoGPT API key required for portrait generation";
       return;
     }
 
     const descriptors = protagonistVisualDescriptors.trim();
     if (!descriptors) {
-      portraitError = 'Add appearance descriptors first';
+      portraitError = "Add appearance descriptors first";
       return;
     }
 
@@ -672,65 +863,73 @@ writingStyle: {
     try {
       // Get style prompt
       const styleId = imageSettings.styleId;
-      let stylePrompt = '';
+      let stylePrompt = "";
       try {
         const promptContext = {
-          mode: 'adventure' as const,
-          pov: 'second' as const,
-          tense: 'present' as const,
-          protagonistName: '',
+          mode: "adventure" as const,
+          pov: "second" as const,
+          tense: "present" as const,
+          protagonistName: "",
         };
-        stylePrompt = promptService.getPrompt(styleId, promptContext) || '';
+        stylePrompt = promptService.getPrompt(styleId, promptContext) || "";
       } catch {
-        stylePrompt = 'Soft cel-shaded anime illustration. Muted pastel color palette. Dreamy, airy atmosphere.';
+        stylePrompt =
+          "Soft cel-shaded anime illustration. Muted pastel color palette. Dreamy, airy atmosphere.";
       }
 
       // Build portrait prompt
       const promptContext = {
-        mode: 'adventure' as const,
-        pov: 'second' as const,
-        tense: 'present' as const,
-        protagonistName: '',
+        mode: "adventure" as const,
+        pov: "second" as const,
+        tense: "present" as const,
+        protagonistName: "",
       };
 
-      const portraitPrompt = promptService.renderPrompt('image-portrait-generation', promptContext, {
-        imageStylePrompt: stylePrompt,
-        visualDescriptors: descriptors,
-        characterName: protagonist.name,
-      });
+      const portraitPrompt = promptService.renderPrompt(
+        "image-portrait-generation",
+        promptContext,
+        {
+          imageStylePrompt: stylePrompt,
+          visualDescriptors: descriptors,
+          characterName: protagonist.name,
+        },
+      );
 
       // Generate
       const provider = new NanoGPTImageProvider(imageSettings.nanoGptApiKey);
       const response = await provider.generateImage({
         prompt: portraitPrompt,
-        model: imageSettings.portraitModel || 'z-image-turbo',
-        size: '1024x1024',
-        response_format: 'b64_json',
+        model: imageSettings.portraitModel || "z-image-turbo",
+        size: "1024x1024",
+        response_format: "b64_json",
       });
 
       if (response.images.length === 0 || !response.images[0].b64_json) {
-        throw new Error('No image data returned');
+        throw new Error("No image data returned");
       }
 
       protagonistPortrait = `data:image/png;base64,${response.images[0].b64_json}`;
     } catch (error) {
-      portraitError = error instanceof Error ? error.message : 'Failed to generate portrait';
+      portraitError =
+        error instanceof Error ? error.message : "Failed to generate portrait";
     } finally {
       isGeneratingProtagonistPortrait = false;
     }
   }
 
   async function generateSupportingCharacterPortrait(charName: string) {
-    const char = supportingCharacters.find(c => c.name === charName);
+    const char = supportingCharacters.find((c) => c.name === charName);
     if (!char || generatingPortraitName !== null) return;
 
     const imageSettings = settings.systemServicesSettings.imageGeneration;
     if (!imageSettings.nanoGptApiKey) {
-      portraitError = 'NanoGPT API key required for portrait generation';
+      portraitError = "NanoGPT API key required for portrait generation";
       return;
     }
 
-    const descriptors = (supportingCharacterVisualDescriptors[charName] || '').trim();
+    const descriptors = (
+      supportingCharacterVisualDescriptors[charName] || ""
+    ).trim();
     if (!descriptors) {
       portraitError = `Add appearance descriptors for ${char.name} first`;
       return;
@@ -742,50 +941,57 @@ writingStyle: {
     try {
       // Get style prompt
       const styleId = imageSettings.styleId;
-      let stylePrompt = '';
+      let stylePrompt = "";
       try {
         const promptContext = {
-          mode: 'adventure' as const,
-          pov: 'second' as const,
-          tense: 'present' as const,
-          protagonistName: '',
+          mode: "adventure" as const,
+          pov: "second" as const,
+          tense: "present" as const,
+          protagonistName: "",
         };
-        stylePrompt = promptService.getPrompt(styleId, promptContext) || '';
+        stylePrompt = promptService.getPrompt(styleId, promptContext) || "";
       } catch {
-        stylePrompt = 'Soft cel-shaded anime illustration. Muted pastel color palette. Dreamy, airy atmosphere.';
+        stylePrompt =
+          "Soft cel-shaded anime illustration. Muted pastel color palette. Dreamy, airy atmosphere.";
       }
 
       // Build portrait prompt
       const promptContext = {
-        mode: 'adventure' as const,
-        pov: 'second' as const,
-        tense: 'present' as const,
-        protagonistName: '',
+        mode: "adventure" as const,
+        pov: "second" as const,
+        tense: "present" as const,
+        protagonistName: "",
       };
 
-      const portraitPrompt = promptService.renderPrompt('image-portrait-generation', promptContext, {
-        imageStylePrompt: stylePrompt,
-        visualDescriptors: descriptors,
-        characterName: char.name,
-      });
+      const portraitPrompt = promptService.renderPrompt(
+        "image-portrait-generation",
+        promptContext,
+        {
+          imageStylePrompt: stylePrompt,
+          visualDescriptors: descriptors,
+          characterName: char.name,
+        },
+      );
 
       // Generate
       const provider = new NanoGPTImageProvider(imageSettings.nanoGptApiKey);
       const response = await provider.generateImage({
         prompt: portraitPrompt,
-        model: imageSettings.portraitModel || 'z-image-turbo',
-        size: '1024x1024',
-        response_format: 'b64_json',
+        model: imageSettings.portraitModel || "z-image-turbo",
+        size: "1024x1024",
+        response_format: "b64_json",
       });
 
       if (response.images.length === 0 || !response.images[0].b64_json) {
-        throw new Error('No image data returned');
+        throw new Error("No image data returned");
       }
 
-      supportingCharacterPortraits[charName] = `data:image/png;base64,${response.images[0].b64_json}`;
+      supportingCharacterPortraits[charName] =
+        `data:image/png;base64,${response.images[0].b64_json}`;
       supportingCharacterPortraits = { ...supportingCharacterPortraits }; // Trigger reactivity
     } catch (error) {
-      portraitError = error instanceof Error ? error.message : 'Failed to generate portrait';
+      portraitError =
+        error instanceof Error ? error.message : "Failed to generate portrait";
     } finally {
       generatingPortraitName = null;
     }
@@ -816,13 +1022,13 @@ writingStyle: {
 
     try {
       // Validate file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Please select an image file');
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Please select an image file");
       }
 
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        throw new Error('Image must be smaller than 5MB');
+        throw new Error("Image must be smaller than 5MB");
       }
 
       // Convert to base64
@@ -830,27 +1036,31 @@ writingStyle: {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         reader.onload = () => {
           const result = reader.result;
-          if (typeof result !== 'string' || !result.startsWith('data:image/')) {
-            reject(new Error('Failed to read image data'));
+          if (typeof result !== "string" || !result.startsWith("data:image/")) {
+            reject(new Error("Failed to read image data"));
             return;
           }
           resolve(result);
         };
-        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsDataURL(file);
       });
 
       protagonistPortrait = dataUrl;
     } catch (error) {
-      portraitError = error instanceof Error ? error.message : 'Failed to upload portrait';
+      portraitError =
+        error instanceof Error ? error.message : "Failed to upload portrait";
     } finally {
       isUploadingProtagonistPortrait = false;
       // Reset input
-      input.value = '';
+      input.value = "";
     }
   }
 
-  async function handleSupportingCharacterPortraitUpload(event: Event, charName: string) {
+  async function handleSupportingCharacterPortraitUpload(
+    event: Event,
+    charName: string,
+  ) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -860,13 +1070,13 @@ writingStyle: {
 
     try {
       // Validate file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Please select an image file');
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Please select an image file");
       }
 
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        throw new Error('Image must be smaller than 5MB');
+        throw new Error("Image must be smaller than 5MB");
       }
 
       // Convert to base64
@@ -874,31 +1084,32 @@ writingStyle: {
       const dataUrl = await new Promise<string>((resolve, reject) => {
         reader.onload = () => {
           const result = reader.result;
-          if (typeof result !== 'string' || !result.startsWith('data:image/')) {
-            reject(new Error('Failed to read image data'));
+          if (typeof result !== "string" || !result.startsWith("data:image/")) {
+            reject(new Error("Failed to read image data"));
             return;
           }
           resolve(result);
         };
-        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.onerror = () => reject(new Error("Failed to read file"));
         reader.readAsDataURL(file);
       });
 
       supportingCharacterPortraits[charName] = dataUrl;
       supportingCharacterPortraits = { ...supportingCharacterPortraits }; // Trigger reactivity
     } catch (error) {
-      portraitError = error instanceof Error ? error.message : 'Failed to upload portrait';
+      portraitError =
+        error instanceof Error ? error.message : "Failed to upload portrait";
     } finally {
       uploadingCharacterName = null;
       // Reset input
-      input.value = '';
+      input.value = "";
     }
   }
 
   // Check if image generation is enabled
   const imageGenerationEnabled = $derived(
     settings.systemServicesSettings.imageGeneration.enabled &&
-    !!settings.systemServicesSettings.imageGeneration.nanoGptApiKey
+      !!settings.systemServicesSettings.imageGeneration.nanoGptApiKey,
   );
 
   // Lorebook import functions
@@ -915,7 +1126,7 @@ writingStyle: {
       const result = parseSillyTavernLorebook(content);
 
       if (!result.success) {
-        importError = result.errors.join('; ') || 'Failed to parse lorebook';
+        importError = result.errors.join("; ") || "Failed to parse lorebook";
         importedLorebook = null;
         importedEntries = [];
         isImporting = false;
@@ -923,7 +1134,8 @@ writingStyle: {
       }
 
       if (result.entries.length === 0) {
-        importError = 'No valid entries found in this file. Please select a valid lorebook JSON file.';
+        importError =
+          "No valid entries found in this file. Please select a valid lorebook JSON file.";
         importedLorebook = null;
         importedEntries = [];
         isImporting = false;
@@ -944,11 +1156,11 @@ writingStyle: {
             (current, total) => {
               classificationProgress = { current, total };
             },
-            selectedMode
+            selectedMode,
           );
           importedEntries = classifiedEntries;
         } catch (classifyError) {
-          console.error('LLM classification failed:', classifyError);
+          console.error("LLM classification failed:", classifyError);
           // Fall back to keyword-based classification
           importedEntries = result.entries;
         } finally {
@@ -959,7 +1171,7 @@ writingStyle: {
         isImporting = false;
       }
     } catch (err) {
-      importError = err instanceof Error ? err.message : 'Failed to read file';
+      importError = err instanceof Error ? err.message : "Failed to read file";
       importedLorebook = null;
       importedEntries = [];
       isImporting = false;
@@ -967,14 +1179,14 @@ writingStyle: {
     }
   }
 
-function clearImport() {
+  function clearImport() {
     importedLorebook = null;
     importedEntries = [];
     importError = null;
     isClassifying = false;
     classificationProgress = { current: 0, total: 0 };
     if (importFileInput) {
-      importFileInput.value = '';
+      importFileInput.value = "";
     }
   }
 
@@ -993,12 +1205,12 @@ function clearImport() {
       const result = await convertCardToScenario(
         content,
         selectedMode,
-        selectedGenre
+        selectedGenre,
       );
 
       if (!result.success && result.errors.length > 0) {
         // Show error but still use fallback if available
-        cardImportError = result.errors.join('; ');
+        cardImportError = result.errors.join("; ");
       }
 
       if (result.settingSeed) {
@@ -1028,10 +1240,11 @@ function clearImport() {
 
       // Reset the file input
       if (cardImportFileInput) {
-        cardImportFileInput.value = '';
+        cardImportFileInput.value = "";
       }
     } catch (err) {
-      cardImportError = err instanceof Error ? err.message : 'Failed to import character card';
+      cardImportError =
+        err instanceof Error ? err.message : "Failed to import character card";
     } finally {
       isImportingCard = false;
     }
@@ -1040,8 +1253,10 @@ function clearImport() {
   function clearCardImport() {
     // Remove card-imported NPCs from supporting characters
     if (importedCardNpcs.length > 0) {
-      const importedNames = new Set(importedCardNpcs.map(n => n.name));
-      supportingCharacters = supportingCharacters.filter(c => !importedNames.has(c.name));
+      const importedNames = new Set(importedCardNpcs.map((n) => n.name));
+      supportingCharacters = supportingCharacters.filter(
+        (c) => !importedNames.has(c.name),
+      );
     }
     importedCardNpcs = [];
     cardImportError = null;
@@ -1050,38 +1265,45 @@ function clearImport() {
     cardImportedAlternateGreetings = [];
     selectedGreetingIndex = 0;
     if (cardImportFileInput) {
-      cardImportFileInput.value = '';
+      cardImportFileInput.value = "";
     }
   }
 
   // Get entry type icon color
   function getTypeColor(type: EntryType): string {
     switch (type) {
-      case 'character': return 'text-blue-400';
-      case 'location': return 'text-green-400';
-      case 'item': return 'text-yellow-400';
-      case 'faction': return 'text-purple-400';
-      case 'concept': return 'text-cyan-400';
-      case 'event': return 'text-red-400';
-      default: return 'text-surface-400';
+      case "character":
+        return "text-blue-400";
+      case "location":
+        return "text-green-400";
+      case "item":
+        return "text-yellow-400";
+      case "faction":
+        return "text-purple-400";
+      case "concept":
+        return "text-cyan-400";
+      case "event":
+        return "text-red-400";
+      default:
+        return "text-surface-400";
     }
   }
 
   // Check if setting seed contains {{user}} placeholder
-  const hasUserPlaceholder = $derived(settingSeed.includes('{{user}}'));
+  const hasUserPlaceholder = $derived(settingSeed.includes("{{user}}"));
 
   // Helper to style {{user}} placeholders in text for display
   // Returns HTML with {{user}} styled as inline tags
   function styleUserPlaceholders(text: string): string {
     return text.replace(
       /\{\{user\}\}/gi,
-      '<span class="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded bg-primary-600/30 text-primary-300 text-xs font-mono border border-primary-500/40">{{user}}</span>'
+      '<span class="inline-flex items-center px-1.5 py-0.5 mx-0.5 rounded bg-primary-600/30 text-primary-300 text-xs font-mono border border-primary-500/40">{{user}}</span>',
     );
   }
 
   // Derived import summary
   const importSummary = $derived(
-    importedEntries.length > 0 ? getImportSummary(importedEntries) : null
+    importedEntries.length > 0 ? getImportSummary(importedEntries) : null,
   );
 </script>
 
@@ -1092,7 +1314,9 @@ function clearImport() {
 >
   <div class="card w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
     <!-- Header -->
-    <div class="flex items-center justify-between border-b border-surface-700 pb-4 shrink-0">
+    <div
+      class="flex items-center justify-between border-b border-surface-700 pb-4 shrink-0"
+    >
       <div>
         <h2 class="text-xl font-semibold text-surface-100">Create New Story</h2>
         <p class="text-sm text-surface-400">
@@ -1128,14 +1352,19 @@ function clearImport() {
           <div class="rounded-full bg-amber-500/20 p-4 mb-4">
             <Sparkles class="h-8 w-8 text-amber-400" />
           </div>
-          <h3 class="text-lg font-semibold text-surface-100 mb-2">API Key Required</h3>
+          <h3 class="text-lg font-semibold text-surface-100 mb-2">
+            API Key Required
+          </h3>
           <p class="text-surface-400 mb-4 max-w-md">
             The setup wizard uses AI to dynamically generate your story world.
             Please configure your OpenRouter API key in settings first.
           </p>
           <button
             class="btn btn-primary"
-            onclick={() => { ui.openSettings(); onClose(); }}
+            onclick={() => {
+              ui.openSettings();
+              onClose();
+            }}
           >
             Open Settings
           </button>
@@ -1143,51 +1372,59 @@ function clearImport() {
       {:else if currentStep === 1}
         <!-- Step 1: Mode Selection -->
         <div class="space-y-4">
-          <p class="text-surface-400">How do you want to experience your story?</p>
+          <p class="text-surface-400">
+            How do you want to experience your story?
+          </p>
           <div class="grid gap-4 sm:grid-cols-2">
             <button
               class="card p-6 text-left transition-all hover:border-primary-500/50"
-              class:ring-2={selectedMode === 'adventure'}
-              class:ring-primary-500={selectedMode === 'adventure'}
-              onclick={() => selectedMode = 'adventure'}
+              class:ring-2={selectedMode === "adventure"}
+              class:ring-primary-500={selectedMode === "adventure"}
+              onclick={() => (selectedMode = "adventure")}
             >
               <div class="flex items-center gap-4 mb-3">
                 <div class="rounded-lg bg-primary-900/50 p-3">
                   <Sword class="h-6 w-6 text-primary-400" />
                 </div>
-                <span class="text-lg font-semibold text-surface-100">Adventure Mode</span>
+                <span class="text-lg font-semibold text-surface-100"
+                  >Adventure Mode</span
+                >
               </div>
               <p class="text-sm text-surface-400">
-                <strong>You are the protagonist.</strong> Explore the world, interact with characters,
-                and make choices that shape your story. The AI narrates the consequences of your actions.
+                <strong>You are the protagonist.</strong> Explore the world, interact
+                with characters, and make choices that shape your story. The AI narrates
+                the consequences of your actions.
               </p>
             </button>
             <button
               class="card p-6 text-left transition-all hover:border-secondary-500/50"
-              class:ring-2={selectedMode === 'creative-writing'}
-              class:ring-secondary-500={selectedMode === 'creative-writing'}
-              onclick={() => selectedMode = 'creative-writing'}
+              class:ring-2={selectedMode === "creative-writing"}
+              class:ring-secondary-500={selectedMode === "creative-writing"}
+              onclick={() => (selectedMode = "creative-writing")}
             >
               <div class="flex items-center gap-4 mb-3">
                 <div class="rounded-lg bg-secondary-900/50 p-3">
                   <Feather class="h-6 w-6 text-secondary-400" />
                 </div>
-                <span class="text-lg font-semibold text-surface-100">Creative Writing</span>
+                <span class="text-lg font-semibold text-surface-100"
+                  >Creative Writing</span
+                >
               </div>
               <p class="text-sm text-surface-400">
-                <strong>You are the author.</strong> Direct the story and craft the narrative.
-                The AI collaborates with you to write prose following your creative vision.
+                <strong>You are the author.</strong> Direct the story and craft the
+                narrative. The AI collaborates with you to write prose following
+                your creative vision.
               </p>
             </button>
           </div>
         </div>
-
       {:else if currentStep === 2}
         <!-- Step 2: Import Lorebook (Optional) -->
         <div class="space-y-4">
           <p class="text-surface-400">
-            Import an existing lorebook to populate your world with characters, locations, and lore.
-            This step is optional - you can skip it and add content later.
+            Import an existing lorebook to populate your world with characters,
+            locations, and lore. This step is optional - you can skip it and add
+            content later.
           </p>
 
           {#if !importedLorebook || isClassifying}
@@ -1195,8 +1432,13 @@ function clearImport() {
             <div
               class="card bg-surface-900 border-dashed border-2 border-surface-600 p-8 text-center hover:border-accent-500/50 transition-colors cursor-pointer"
               class:pointer-events-none={isImporting || isClassifying}
-              onclick={() => !isImporting && !isClassifying && importFileInput?.click()}
-              onkeydown={(e) => e.key === 'Enter' && !isImporting && !isClassifying && importFileInput?.click()}
+              onclick={() =>
+                !isImporting && !isClassifying && importFileInput?.click()}
+              onkeydown={(e) =>
+                e.key === "Enter" &&
+                !isImporting &&
+                !isClassifying &&
+                importFileInput?.click()}
               role="button"
               tabindex="0"
             >
@@ -1208,29 +1450,48 @@ function clearImport() {
                 onchange={handleFileSelect}
               />
               {#if isImporting}
-                <Loader2 class="h-8 w-8 mx-auto mb-2 text-accent-400 animate-spin" />
+                <Loader2
+                  class="h-8 w-8 mx-auto mb-2 text-accent-400 animate-spin"
+                />
                 <p class="text-surface-300">Parsing lorebook...</p>
               {:else if isClassifying}
-                <Loader2 class="h-8 w-8 mx-auto mb-2 text-accent-400 animate-spin" />
-                <p class="text-surface-300 font-medium">Classifying entries with AI...</p>
-                <p class="text-xs text-surface-500 mt-1">
-                  {classificationProgress.current} / {classificationProgress.total} entries
+                <Loader2
+                  class="h-8 w-8 mx-auto mb-2 text-accent-400 animate-spin"
+                />
+                <p class="text-surface-300 font-medium">
+                  Classifying entries with AI...
                 </p>
-                <div class="mt-3 w-full max-w-xs mx-auto bg-surface-700 rounded-full h-2">
+                <p class="text-xs text-surface-500 mt-1">
+                  {classificationProgress.current} / {classificationProgress.total}
+                  entries
+                </p>
+                <div
+                  class="mt-3 w-full max-w-xs mx-auto bg-surface-700 rounded-full h-2"
+                >
                   <div
                     class="bg-accent-500 h-2 rounded-full transition-all duration-300"
-                    style="width: {classificationProgress.total > 0 ? (classificationProgress.current / classificationProgress.total) * 100 : 0}%"
+                    style="width: {classificationProgress.total > 0
+                      ? (classificationProgress.current /
+                          classificationProgress.total) *
+                        100
+                      : 0}%"
                   ></div>
                 </div>
               {:else}
                 <Upload class="h-8 w-8 mx-auto mb-2 text-surface-500" />
-                <p class="text-surface-300 font-medium">Click to upload a lorebook</p>
-                <p class="text-xs text-surface-500 mt-1">Supports SillyTavern lorebook format (.json)</p>
+                <p class="text-surface-300 font-medium">
+                  Click to upload a lorebook
+                </p>
+                <p class="text-xs text-surface-500 mt-1">
+                  Supports SillyTavern lorebook format (.json)
+                </p>
               {/if}
             </div>
 
             {#if importError && !isClassifying}
-              <div class="card bg-red-500/10 border-red-500/30 p-3 flex items-start gap-2">
+              <div
+                class="card bg-red-500/10 border-red-500/30 p-3 flex items-start gap-2"
+              >
                 <AlertCircle class="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
                 <p class="text-sm text-red-400">{importError}</p>
               </div>
@@ -1259,22 +1520,32 @@ function clearImport() {
               {#if importSummary}
                 <div class="grid grid-cols-2 gap-3 text-sm">
                   <div class="card bg-surface-800 p-3">
-                    <div class="text-2xl font-bold text-surface-100">{importSummary.total}</div>
+                    <div class="text-2xl font-bold text-surface-100">
+                      {importSummary.total}
+                    </div>
                     <div class="text-xs text-surface-400">Total Entries</div>
                   </div>
                   <div class="card bg-surface-800 p-3">
-                    <div class="text-2xl font-bold text-surface-100">{importSummary.withContent}</div>
+                    <div class="text-2xl font-bold text-surface-100">
+                      {importSummary.withContent}
+                    </div>
                     <div class="text-xs text-surface-400">With Content</div>
                   </div>
                 </div>
 
                 <!-- Type Breakdown -->
                 <div class="space-y-2">
-                  <h4 class="text-xs font-medium text-surface-400 uppercase">By Type</h4>
+                  <h4 class="text-xs font-medium text-surface-400 uppercase">
+                    By Type
+                  </h4>
                   <div class="flex flex-wrap gap-2">
                     {#each Object.entries(importSummary.byType) as [type, count]}
                       {#if count > 0}
-                        <span class="px-2 py-1 rounded-full bg-surface-700 text-xs {getTypeColor(type as EntryType)}">
+                        <span
+                          class="px-2 py-1 rounded-full bg-surface-700 text-xs {getTypeColor(
+                            type as EntryType,
+                          )}"
+                        >
                           {type}: {count}
                         </span>
                       {/if}
@@ -1285,16 +1556,28 @@ function clearImport() {
                 <!-- Entry Preview List -->
                 {#if importedEntries.length > 0}
                   <div class="space-y-2">
-                    <h4 class="text-xs font-medium text-surface-400 uppercase">Preview (first 10)</h4>
+                    <h4 class="text-xs font-medium text-surface-400 uppercase">
+                      Preview (first 10)
+                    </h4>
                     <div class="max-h-40 overflow-y-auto space-y-1">
                       {#each importedEntries.slice(0, 10) as entry}
-                        <div class="flex items-center gap-2 text-sm p-2 rounded bg-surface-800">
-                          <span class="px-1.5 py-0.5 rounded text-xs {getTypeColor(entry.type)} bg-surface-700">
+                        <div
+                          class="flex items-center gap-2 text-sm p-2 rounded bg-surface-800"
+                        >
+                          <span
+                            class="px-1.5 py-0.5 rounded text-xs {getTypeColor(
+                              entry.type,
+                            )} bg-surface-700"
+                          >
                             {entry.type}
                           </span>
-                          <span class="text-surface-200 truncate flex-1">{entry.name}</span>
+                          <span class="text-surface-200 truncate flex-1"
+                            >{entry.name}</span
+                          >
                           {#if entry.keywords.length > 0}
-                            <span class="text-xs text-surface-500">{entry.keywords.length} keywords</span>
+                            <span class="text-xs text-surface-500"
+                              >{entry.keywords.length} keywords</span
+                            >
                           {/if}
                         </div>
                       {/each}
@@ -1317,14 +1600,16 @@ function clearImport() {
           {/if}
 
           <p class="text-xs text-surface-500 text-center">
-            Imported entries will be added to your story's lorebook after creation.
+            Imported entries will be added to your story's lorebook after
+            creation.
           </p>
         </div>
-
       {:else if currentStep === 3}
         <!-- Step 3: Genre Selection -->
         <div class="space-y-4">
-          <p class="text-surface-400">What kind of story do you want to tell?</p>
+          <p class="text-surface-400">
+            What kind of story do you want to tell?
+          </p>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {#each genres as genre}
               {@const Icon = genre.icon}
@@ -1332,7 +1617,7 @@ function clearImport() {
                 class="card p-4 text-left transition-all hover:border-accent-500/50"
                 class:ring-2={selectedGenre === genre.id}
                 class:ring-accent-500={selectedGenre === genre.id}
-                onclick={() => selectedGenre = genre.id}
+                onclick={() => (selectedGenre = genre.id)}
               >
                 <div class="flex items-center gap-3 mb-2">
                   <div class="rounded-lg bg-surface-700 p-2">
@@ -1344,7 +1629,7 @@ function clearImport() {
               </button>
             {/each}
           </div>
-          {#if selectedGenre === 'custom'}
+          {#if selectedGenre === "custom"}
             <div class="mt-4">
               <label class="mb-2 block text-sm font-medium text-surface-300">
                 Describe your genre
@@ -1358,12 +1643,12 @@ function clearImport() {
             </div>
           {/if}
         </div>
-
-{:else if currentStep === 4}
+      {:else if currentStep === 4}
         <!-- Step 4: Setting -->
         <div class="space-y-4">
           <p class="text-surface-400">
-            Describe your world in a few sentences. The AI will expand it into a rich setting.
+            Describe your world in a few sentences. The AI will expand it into a
+            rich setting.
           </p>
 
           <!-- Character Card Import -->
@@ -1371,7 +1656,9 @@ function clearImport() {
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <FileJson class="h-4 w-4 text-surface-400" />
-                <span class="text-sm font-medium text-surface-300">Import Character Card</span>
+                <span class="text-sm font-medium text-surface-300"
+                  >Import Character Card</span
+                >
                 <span class="text-xs text-surface-500">(Optional)</span>
               </div>
               {#if importedCardNpcs.length > 0}
@@ -1384,7 +1671,8 @@ function clearImport() {
               {/if}
             </div>
             <p class="text-xs text-surface-500">
-              Import a SillyTavern character card (.json or .png) to generate a setting with the character as an NPC.
+              Import a SillyTavern character card (.json or .png) to generate a
+              setting with the character as an NPC.
             </p>
             <div class="flex items-center gap-2">
               <input
@@ -1410,7 +1698,7 @@ function clearImport() {
               {#if importedCardNpcs.length > 0}
                 <span class="text-xs text-green-400 flex items-center gap-1">
                   <Check class="h-3 w-3" />
-                  Imported: {importedCardNpcs.map(n => n.name).join(', ')}
+                  Imported: {importedCardNpcs.map((n) => n.name).join(", ")}
                 </span>
               {/if}
             </div>
@@ -1431,7 +1719,10 @@ function clearImport() {
             ></textarea>
             {#if hasUserPlaceholder}
               <p class="text-xs text-surface-500 mt-1 flex items-center gap-1">
-                <span class="inline-flex items-center px-1 py-0.5 rounded bg-primary-600/30 text-primary-300 text-[10px] font-mono border border-primary-500/40">{'{{user}}'}</span>
+                <span
+                  class="inline-flex items-center px-1 py-0.5 rounded bg-primary-600/30 text-primary-300 text-[10px] font-mono border border-primary-500/40"
+                  >{"{{user}}"}</span
+                >
                 will be replaced with your character's name from Step 5
               </p>
             {/if}
@@ -1469,11 +1760,13 @@ function clearImport() {
           {#if expandedSetting}
             <div class="card bg-surface-900 p-4 space-y-3">
               <div class="flex items-center justify-between">
-                <h3 class="font-semibold text-surface-100">{expandedSetting.name}</h3>
+                <h3 class="font-semibold text-surface-100">
+                  {expandedSetting.name}
+                </h3>
                 <div class="flex gap-2">
                   <button
                     class="text-xs text-surface-400 hover:text-surface-200 flex items-center gap-1"
-                    onclick={() => expandedSetting = null}
+                    onclick={() => (expandedSetting = null)}
                   >
                     <PenTool class="h-3 w-3" />
                     Edit
@@ -1483,19 +1776,30 @@ function clearImport() {
                     onclick={expandSetting}
                     disabled={isExpandingSetting}
                   >
-                    <RefreshCw class="h-3 w-3 {isExpandingSetting ? 'animate-spin' : ''}" />
-                    {isExpandingSetting ? 'Regenerating...' : 'Regenerate'}
+                    <RefreshCw
+                      class="h-3 w-3 {isExpandingSetting ? 'animate-spin' : ''}"
+                    />
+                    {isExpandingSetting ? "Regenerating..." : "Regenerate"}
                   </button>
                 </div>
               </div>
-              <p class="text-sm text-surface-300 whitespace-pre-wrap">{expandedSetting.description}</p>
+              <p class="text-sm text-surface-300 whitespace-pre-wrap">
+                {expandedSetting.description}
+              </p>
 
               {#if expandedSetting.keyLocations.length > 0}
                 <div>
-                  <h4 class="text-xs font-medium text-surface-400 uppercase mb-1">Key Locations</h4>
+                  <h4
+                    class="text-xs font-medium text-surface-400 uppercase mb-1"
+                  >
+                    Key Locations
+                  </h4>
                   <ul class="text-sm text-surface-300 space-y-1">
                     {#each expandedSetting.keyLocations as location}
-                      <li><strong>{location.name}:</strong> {location.description}</li>
+                      <li>
+                        <strong>{location.name}:</strong>
+                        {location.description}
+                      </li>
                     {/each}
                   </ul>
                 </div>
@@ -1503,35 +1807,64 @@ function clearImport() {
 
               <div class="flex flex-wrap gap-2">
                 {#each expandedSetting.themes as theme}
-                  <span class="px-2 py-0.5 rounded-full bg-surface-700 text-xs text-surface-300">{theme}</span>
+                  <span
+                    class="px-2 py-0.5 rounded-full bg-surface-700 text-xs text-surface-300"
+                    >{theme}</span
+                  >
                 {/each}
               </div>
             </div>
           {/if}
         </div>
-
       {:else if currentStep === 5}
         <!-- Step 5: Protagonist/Characters -->
         <div class="space-y-4">
-          <p class="text-surface-400">
-            {selectedMode === 'adventure'
-              ? 'Create your character for this adventure.'
-              : 'Define the main characters for your story.'}
-          </p>
+          <!-- Vault Picker Modals -->
+          {#if showProtagonistVaultPicker}
+            <VaultCharacterPicker
+              filterType="protagonist"
+              onSelect={handleSelectProtagonistFromVault}
+              onClose={() => (showProtagonistVaultPicker = false)}
+            />
+          {/if}
 
+          {#if showSupportingVaultPicker}
+            <VaultCharacterPicker
+              filterType="supporting"
+              onSelect={handleSelectSupportingFromVault}
+              onClose={() => (showSupportingVaultPicker = false)}
+            />
+          {/if}
           {#if !expandedSetting}
             <div class="card bg-amber-500/10 border-amber-500/30 p-4">
               <p class="text-sm text-amber-400">
-                Go back to Step 4 and expand your setting first. This helps create a more fitting character.
+                Go back to Step 4 and expand your setting first. This helps
+                create a more fitting character.
               </p>
             </div>
           {:else}
             <!-- Protagonist Section -->
             <div class="space-y-3">
               <div class="flex items-center justify-between">
-                <h3 class="font-medium text-surface-100">
-                  {selectedMode === 'adventure' ? 'Your Character' : 'Main Character'}
-                </h3>
+                <div class="px-2">
+                  <p class="text-surface-400 mb-3">
+                    {selectedMode === "adventure"
+                      ? "Create your character for this adventure."
+                      : "Define the main characters for your story."}
+                  </p>
+                  <h3 class="font-medium text-surface-100">
+                    {selectedMode === "adventure"
+                      ? "Your Character"
+                      : "Main Character"}
+                  </h3>
+                </div>
+                <button
+                  class="btn btn-secondary btn-sm flex items-center gap-1.5 mr-2 self-end"
+                  onclick={() => (showProtagonistVaultPicker = true)}
+                  title="Select a character from your vault"
+                >
+                  Use from Vault
+                </button>
               </div>
 
               {#if protagonistError}
@@ -1541,12 +1874,19 @@ function clearImport() {
               {#if showManualInput && !protagonist}
                 <!-- Manual Character Input Form -->
                 <div class="card bg-surface-900 p-4 space-y-4">
-                  <p class="text-sm text-surface-400">
-                    Enter your character details below. You can use them as-is, have AI elaborate on them, or generate a completely new character.
-                  </p>
+                  <div class="flex items-center justify-between">
+                    <p class="text-sm text-surface-400">
+                      Enter your character details below. You can use them
+                      as-is, have AI elaborate on them, or generate a completely
+                      new character.
+                    </p>
+                  </div>
 
                   <div>
-                    <label class="mb-1 block text-xs font-medium text-surface-400">Character Name</label>
+                    <label
+                      class="mb-1 block text-xs font-medium text-surface-400"
+                      >Character Name</label
+                    >
                     <input
                       type="text"
                       bind:value={manualCharacterName}
@@ -1556,7 +1896,10 @@ function clearImport() {
                   </div>
 
                   <div>
-                    <label class="mb-1 block text-xs font-medium text-surface-400">Description</label>
+                    <label
+                      class="mb-1 block text-xs font-medium text-surface-400"
+                      >Description</label
+                    >
                     <textarea
                       bind:value={manualCharacterDescription}
                       placeholder="Physical appearance, demeanor, notable features..."
@@ -1566,7 +1909,10 @@ function clearImport() {
                   </div>
 
                   <div>
-                    <label class="mb-1 block text-xs font-medium text-surface-400">Background</label>
+                    <label
+                      class="mb-1 block text-xs font-medium text-surface-400"
+                      >Background</label
+                    >
                     <textarea
                       bind:value={manualCharacterBackground}
                       placeholder="Where they come from, their history..."
@@ -1576,7 +1922,10 @@ function clearImport() {
                   </div>
 
                   <div>
-                    <label class="mb-1 block text-xs font-medium text-surface-400">Motivation</label>
+                    <label
+                      class="mb-1 block text-xs font-medium text-surface-400"
+                      >Motivation</label
+                    >
                     <input
                       type="text"
                       bind:value={manualCharacterMotivation}
@@ -1586,7 +1935,10 @@ function clearImport() {
                   </div>
 
                   <div>
-                    <label class="mb-1 block text-xs font-medium text-surface-400">Traits (comma-separated)</label>
+                    <label
+                      class="mb-1 block text-xs font-medium text-surface-400"
+                      >Traits (comma-separated)</label
+                    >
                     <input
                       type="text"
                       bind:value={manualCharacterTraits}
@@ -1595,7 +1947,9 @@ function clearImport() {
                     />
                   </div>
 
-                  <div class="flex flex-wrap gap-2 pt-2 border-t border-surface-700">
+                  <div
+                    class="flex flex-wrap gap-2 pt-2 border-t border-surface-700"
+                  >
                     <button
                       class="btn btn-secondary btn-sm flex items-center gap-1"
                       onclick={useManualCharacter}
@@ -1608,7 +1962,10 @@ function clearImport() {
                     <button
                       class="btn btn-primary btn-sm flex items-center gap-1"
                       onclick={elaborateCharacter}
-                      disabled={isElaboratingCharacter || (!manualCharacterName.trim() && !manualCharacterDescription.trim() && !manualCharacterBackground.trim())}
+                      disabled={isElaboratingCharacter ||
+                        (!manualCharacterName.trim() &&
+                          !manualCharacterDescription.trim() &&
+                          !manualCharacterBackground.trim())}
                       title="Have AI expand on your character details"
                     >
                       {#if isElaboratingCharacter}
@@ -1633,13 +1990,24 @@ function clearImport() {
                         Generate New
                       {/if}
                     </button>
+                    <button
+                      class="btn btn-secondary btn-sm flex items-center gap-1 ml-auto"
+                      onclick={handleSaveProtagonistToVault}
+                      disabled={!manualCharacterName.trim()}
+                      title="Save this character to your vault for reuse"
+                    >
+                      <Archive class="h-3 w-3" />
+                      {savedToVaultConfirm ? "Saved!" : "Save to Vault"}
+                    </button>
                   </div>
                 </div>
               {:else if protagonist}
                 <!-- Generated/Final Character Display -->
                 <div class="card bg-surface-900 p-4 space-y-2">
                   <div class="flex items-start justify-between">
-                    <h4 class="font-semibold text-surface-100">{protagonist.name}</h4>
+                    <h4 class="font-semibold text-surface-100">
+                      {protagonist.name}
+                    </h4>
                     <div class="flex gap-1">
                       <button
                         class="text-xs text-surface-400 hover:text-surface-200 flex items-center gap-1"
@@ -1655,34 +2023,55 @@ function clearImport() {
                         disabled={isGeneratingProtagonist}
                         title="Generate a different character"
                       >
-                        <RefreshCw class="h-3 w-3 {isGeneratingProtagonist ? 'animate-spin' : ''}" />
-                        {isGeneratingProtagonist ? 'Regenerating...' : 'Regenerate'}
+                        <RefreshCw
+                          class="h-3 w-3 {isGeneratingProtagonist
+                            ? 'animate-spin'
+                            : ''}"
+                        />
+                        {isGeneratingProtagonist
+                          ? "Regenerating..."
+                          : "Regenerate"}
                       </button>
                     </div>
                   </div>
-                  <p class="text-sm text-surface-300">{protagonist.description}</p>
+                  <p class="text-sm text-surface-300">
+                    {protagonist.description}
+                  </p>
                   {#if protagonist.background}
-                    <p class="text-sm text-surface-400"><strong>Background:</strong> {protagonist.background}</p>
+                    <p class="text-sm text-surface-400">
+                      <strong>Background:</strong>
+                      {protagonist.background}
+                    </p>
                   {/if}
                   {#if protagonist.motivation}
-                    <p class="text-sm text-surface-400"><strong>Motivation:</strong> {protagonist.motivation}</p>
+                    <p class="text-sm text-surface-400">
+                      <strong>Motivation:</strong>
+                      {protagonist.motivation}
+                    </p>
                   {/if}
                   {#if protagonist.traits && protagonist.traits.length > 0}
                     <div class="flex flex-wrap gap-1">
                       {#each protagonist.traits as trait}
-                        <span class="px-2 py-0.5 rounded-full bg-primary-900/50 text-xs text-primary-400">{trait}</span>
+                        <span
+                          class="px-2 py-0.5 rounded-full bg-primary-900/50 text-xs text-primary-400"
+                          >{trait}</span
+                        >
                       {/each}
                     </div>
                   {/if}
                 </div>
               {:else}
                 <!-- Fallback: Show generate button -->
-                <div class="card bg-surface-900 border-dashed border-2 border-surface-600 p-6 text-center">
-                  <p class="text-surface-400 mb-3">Enter your own character details or generate one with AI</p>
+                <div
+                  class="card bg-surface-900 border-dashed border-2 border-surface-600 p-6 text-center"
+                >
+                  <p class="text-surface-400 mb-3">
+                    Enter your own character details or generate one with AI
+                  </p>
                   <div class="flex justify-center gap-2">
                     <button
                       class="btn btn-secondary btn-sm"
-                      onclick={() => showManualInput = true}
+                      onclick={() => (showManualInput = true)}
                     >
                       Enter Manually
                     </button>
@@ -1706,16 +2095,26 @@ function clearImport() {
             <!-- Hint when no protagonist is defined -->
             {#if !protagonist && !showManualInput}
               <p class="text-xs text-surface-500 italic">
-                Tip: While optional, having a protagonist helps the AI create more personalized story content.
+                Tip: While optional, having a protagonist helps the AI create
+                more personalized story content.
               </p>
             {/if}
 
             <!-- Supporting Characters (Creative Mode Only) -->
-            {#if selectedMode === 'creative-writing'}
+            {#if selectedMode === "creative-writing"}
               <div class="space-y-3 pt-4 border-t border-surface-700">
                 <div class="flex items-center justify-between">
                   <h3 class="font-medium text-surface-100">Supporting Cast</h3>
                   <div class="flex gap-2">
+                    <button
+                      class="btn btn-secondary btn-sm flex items-center gap-1"
+                      onclick={() => (showSupportingVaultPicker = true)}
+                      disabled={showSupportingCharacterForm}
+                      title="Select from vault"
+                    >
+                      <Archive class="h-3 w-3" />
+                      Vault
+                    </button>
                     <button
                       class="btn btn-secondary btn-sm flex items-center gap-1"
                       onclick={openSupportingCharacterForm}
@@ -1745,12 +2144,18 @@ function clearImport() {
                 {#if showSupportingCharacterForm}
                   <div class="card bg-surface-900 p-4 space-y-4">
                     <p class="text-sm text-surface-400">
-                      {editingSupportingCharacterIndex !== null ? 'Edit' : 'Add'} a supporting character. You can use them as-is or have AI elaborate on them.
+                      {editingSupportingCharacterIndex !== null
+                        ? "Edit"
+                        : "Add"} a supporting character. You can use them as-is or
+                      have AI elaborate on them.
                     </p>
 
                     <div class="grid grid-cols-2 gap-3">
                       <div>
-                        <label class="mb-1 block text-xs font-medium text-surface-400">Name</label>
+                        <label
+                          class="mb-1 block text-xs font-medium text-surface-400"
+                          >Name</label
+                        >
                         <input
                           type="text"
                           bind:value={supportingCharacterName}
@@ -1759,7 +2164,10 @@ function clearImport() {
                         />
                       </div>
                       <div>
-                        <label class="mb-1 block text-xs font-medium text-surface-400">Role</label>
+                        <label
+                          class="mb-1 block text-xs font-medium text-surface-400"
+                          >Role</label
+                        >
                         <input
                           type="text"
                           bind:value={supportingCharacterRole}
@@ -1770,7 +2178,10 @@ function clearImport() {
                     </div>
 
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-surface-400">Description</label>
+                      <label
+                        class="mb-1 block text-xs font-medium text-surface-400"
+                        >Description</label
+                      >
                       <textarea
                         bind:value={supportingCharacterDescription}
                         placeholder="Physical appearance, personality, notable features..."
@@ -1780,7 +2191,10 @@ function clearImport() {
                     </div>
 
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-surface-400">Relationship to Protagonist</label>
+                      <label
+                        class="mb-1 block text-xs font-medium text-surface-400"
+                        >Relationship to Protagonist</label
+                      >
                       <input
                         type="text"
                         bind:value={supportingCharacterRelationship}
@@ -1790,7 +2204,10 @@ function clearImport() {
                     </div>
 
                     <div>
-                      <label class="mb-1 block text-xs font-medium text-surface-400">Traits (comma-separated)</label>
+                      <label
+                        class="mb-1 block text-xs font-medium text-surface-400"
+                        >Traits (comma-separated)</label
+                      >
                       <input
                         type="text"
                         bind:value={supportingCharacterTraits}
@@ -1799,7 +2216,9 @@ function clearImport() {
                       />
                     </div>
 
-                    <div class="flex flex-wrap gap-2 pt-2 border-t border-surface-700">
+                    <div
+                      class="flex flex-wrap gap-2 pt-2 border-t border-surface-700"
+                    >
                       <button
                         class="btn btn-secondary btn-sm flex items-center gap-1"
                         onclick={useSupportingCharacterAsIs}
@@ -1812,7 +2231,9 @@ function clearImport() {
                       <button
                         class="btn btn-primary btn-sm flex items-center gap-1"
                         onclick={elaborateSupportingCharacter}
-                        disabled={isElaboratingSupportingCharacter || (!supportingCharacterName.trim() && !supportingCharacterDescription.trim())}
+                        disabled={isElaboratingSupportingCharacter ||
+                          (!supportingCharacterName.trim() &&
+                            !supportingCharacterDescription.trim())}
                         title="Have AI expand on character details"
                       >
                         {#if isElaboratingSupportingCharacter}
@@ -1841,8 +2262,13 @@ function clearImport() {
                       <div class="card bg-surface-900 p-3">
                         <div class="flex items-start justify-between mb-1">
                           <div class="flex items-center gap-2">
-                            <span class="font-medium text-surface-100">{char.name}</span>
-                            <span class="text-xs px-1.5 py-0.5 rounded bg-accent-500/20 text-accent-400">{char.role}</span>
+                            <span class="font-medium text-surface-100"
+                              >{char.name}</span
+                            >
+                            <span
+                              class="text-xs px-1.5 py-0.5 rounded bg-accent-500/20 text-accent-400"
+                              >{char.role}</span
+                            >
                           </div>
                           <div class="flex gap-1">
                             <button
@@ -1861,14 +2287,21 @@ function clearImport() {
                             </button>
                           </div>
                         </div>
-                        <p class="text-sm text-surface-300">{char.description}</p>
+                        <p class="text-sm text-surface-300">
+                          {char.description}
+                        </p>
                         {#if char.relationship}
-                          <p class="text-xs text-surface-400 mt-1">{char.relationship}</p>
+                          <p class="text-xs text-surface-400 mt-1">
+                            {char.relationship}
+                          </p>
                         {/if}
                         {#if char.traits && char.traits.length > 0}
                           <div class="flex flex-wrap gap-1 mt-1">
                             {#each char.traits as trait}
-                              <span class="px-1.5 py-0.5 rounded-full bg-surface-700 text-xs text-surface-400">{trait}</span>
+                              <span
+                                class="px-1.5 py-0.5 rounded-full bg-surface-700 text-xs text-surface-400"
+                                >{trait}</span
+                              >
                             {/each}
                           </div>
                         {/if}
@@ -1877,242 +2310,314 @@ function clearImport() {
                   </div>
                 {:else if !showSupportingCharacterForm}
                   <p class="text-sm text-surface-500 italic">
-                    No supporting characters yet. Add one manually or generate multiple with AI.
+                    No supporting characters yet. Add one manually or generate
+                    multiple with AI.
                   </p>
                 {/if}
               </div>
             {/if}
           {/if}
         </div>
-
       {:else if currentStep === 6}
         <!-- Step 6: Character Portraits -->
         <div class="space-y-4">
           <p class="text-surface-400">
-            Upload or generate portrait images for your characters. In portrait mode, only characters with portraits can appear in story images.
+            Upload or generate portrait images for your characters. In portrait
+            mode, only characters with portraits can appear in story images.
           </p>
 
           {#if !imageGenerationEnabled}
             <div class="card bg-amber-500/10 border-amber-500/30 p-4">
               <p class="text-sm text-amber-400">
-                Image generation is not configured. You can still upload portraits manually, or enable generation in Settings &gt; Image Generation.
+                Image generation is not configured. You can still upload
+                portraits manually, or enable generation in Settings &gt; Image
+                Generation.
               </p>
             </div>
           {/if}
 
           {#if portraitError}
-              <div class="card bg-red-500/10 border-red-500/30 p-3">
-                <p class="text-sm text-red-400">{portraitError}</p>
-              </div>
-            {/if}
+            <div class="card bg-red-500/10 border-red-500/30 p-3">
+              <p class="text-sm text-red-400">{portraitError}</p>
+            </div>
+          {/if}
 
-            <!-- Protagonist Portrait -->
-            {#if protagonist}
-              <div class="card bg-surface-900 p-4 space-y-3">
-                <div class="flex items-center justify-between">
-                  <h3 class="font-medium text-surface-100">{protagonist.name}</h3>
-                  <span class="text-xs px-2 py-0.5 rounded bg-primary-500/20 text-primary-400">Protagonist</span>
+          <!-- Protagonist Portrait -->
+          {#if protagonist}
+            <div class="card bg-surface-900 p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="font-medium text-surface-100">{protagonist.name}</h3>
+                <span
+                  class="text-xs px-2 py-0.5 rounded bg-primary-500/20 text-primary-400"
+                  >Protagonist</span
+                >
+              </div>
+
+              <div class="flex gap-4">
+                <!-- Portrait Preview -->
+                <div class="shrink-0">
+                  {#if protagonistPortrait}
+                    <div class="relative">
+                      <img
+                        src={normalizeImageDataUrl(protagonistPortrait) ?? ""}
+                        alt="{protagonist.name} portrait"
+                        class="w-24 h-24 rounded-lg object-cover ring-1 ring-surface-600"
+                      />
+                      <button
+                        class="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                        onclick={removeProtagonistPortrait}
+                        title="Remove portrait"
+                      >
+                        <X class="h-3 w-3" />
+                      </button>
+                    </div>
+                  {:else}
+                    <div
+                      class="w-24 h-24 rounded-lg border-2 border-dashed border-surface-600 bg-surface-800 flex items-center justify-center"
+                    >
+                      <User class="h-8 w-8 text-surface-600" />
+                    </div>
+                  {/if}
                 </div>
 
-                <div class="flex gap-4">
-                  <!-- Portrait Preview -->
-                  <div class="shrink-0">
-                    {#if protagonistPortrait}
-                      <div class="relative">
-                        <img
-                          src={normalizeImageDataUrl(protagonistPortrait) ?? ''}
-                          alt="{protagonist.name} portrait"
-                          class="w-24 h-24 rounded-lg object-cover ring-1 ring-surface-600"
-                        />
-                        <button
-                          class="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
-                          onclick={removeProtagonistPortrait}
-                          title="Remove portrait"
-                        >
-                          <X class="h-3 w-3" />
-                        </button>
-                      </div>
-                    {:else}
-                      <div class="w-24 h-24 rounded-lg border-2 border-dashed border-surface-600 bg-surface-800 flex items-center justify-center">
-                        <User class="h-8 w-8 text-surface-600" />
-                      </div>
+                <!-- Appearance Input & Generate/Upload Buttons -->
+                <div class="flex-1 space-y-2">
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-surface-400"
+                      >Appearance (comma-separated)</label
+                    >
+                    <textarea
+                      bind:value={protagonistVisualDescriptors}
+                      placeholder="e.g., long silver hair, violet eyes, fair skin, elegant dark blue coat..."
+                      class="input text-sm min-h-[60px] resize-none"
+                      rows="2"
+                    ></textarea>
+                  </div>
+                  <div class="flex gap-2">
+                    <label
+                      class="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer"
+                    >
+                      {#if isUploadingProtagonistPortrait}
+                        <Loader2 class="h-3 w-3 animate-spin" />
+                        Uploading...
+                      {:else}
+                        <ImageUp class="h-3 w-3" />
+                        Upload
+                      {/if}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="hidden"
+                        onchange={handleProtagonistPortraitUpload}
+                        disabled={isUploadingProtagonistPortrait ||
+                          isGeneratingProtagonistPortrait}
+                      />
+                    </label>
+                    {#if imageGenerationEnabled}
+                      <button
+                        class="btn btn-secondary btn-sm flex items-center gap-1"
+                        onclick={generateProtagonistPortrait}
+                        disabled={isGeneratingProtagonistPortrait ||
+                          isUploadingProtagonistPortrait ||
+                          !protagonistVisualDescriptors.trim()}
+                        title={!protagonistVisualDescriptors.trim()
+                          ? "Add appearance descriptors to generate"
+                          : ""}
+                      >
+                        {#if isGeneratingProtagonistPortrait}
+                          <Loader2 class="h-3 w-3 animate-spin" />
+                          Generating...
+                        {:else}
+                          <Wand2 class="h-3 w-3" />
+                          {protagonistPortrait ? "Regenerate" : "Generate"}
+                        {/if}
+                      </button>
                     {/if}
                   </div>
+                </div>
+              </div>
+            </div>
+          {:else}
+            <div
+              class="card bg-surface-900 border-dashed border-2 border-surface-600 p-4 text-center"
+            >
+              <p class="text-surface-400 text-sm">
+                No protagonist created. Go back to step 5 to create one.
+              </p>
+            </div>
+          {/if}
 
-                  <!-- Appearance Input & Generate/Upload Buttons -->
-                  <div class="flex-1 space-y-2">
-                    <div>
-                      <label class="mb-1 block text-xs font-medium text-surface-400">Appearance (comma-separated)</label>
-                      <textarea
-                        bind:value={protagonistVisualDescriptors}
-                        placeholder="e.g., long silver hair, violet eyes, fair skin, elegant dark blue coat..."
-                        class="input text-sm min-h-[60px] resize-none"
-                        rows="2"
-                      ></textarea>
-                    </div>
-                    <div class="flex gap-2">
-                      <label class="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer">
-                        {#if isUploadingProtagonistPortrait}
-                          <Loader2 class="h-3 w-3 animate-spin" />
-                          Uploading...
-                        {:else}
-                          <ImageUp class="h-3 w-3" />
-                          Upload
-                        {/if}
-                        <input
-                          type="file"
-                          accept="image/*"
-                          class="hidden"
-                          onchange={handleProtagonistPortraitUpload}
-                          disabled={isUploadingProtagonistPortrait || isGeneratingProtagonistPortrait}
-                        />
-                      </label>
-                      {#if imageGenerationEnabled}
-                        <button
-                          class="btn btn-secondary btn-sm flex items-center gap-1"
-                          onclick={generateProtagonistPortrait}
-                          disabled={isGeneratingProtagonistPortrait || isUploadingProtagonistPortrait || !protagonistVisualDescriptors.trim()}
-                          title={!protagonistVisualDescriptors.trim() ? 'Add appearance descriptors to generate' : ''}
+          <!-- Supporting Character Portraits -->
+          {#if supportingCharacters.length > 0}
+            <div class="space-y-3">
+              <h4 class="text-sm font-medium text-surface-300">
+                Supporting Characters
+              </h4>
+              {#each supportingCharacters as char, index}
+                <div class="card bg-surface-900 p-4 space-y-3">
+                  <div class="flex items-center justify-between">
+                    <h3 class="font-medium text-surface-100">{char.name}</h3>
+                    <span
+                      class="text-xs px-2 py-0.5 rounded bg-accent-500/20 text-accent-400"
+                      >{char.role}</span
+                    >
+                  </div>
+
+                  <div class="flex gap-4">
+                    <!-- Portrait Preview -->
+                    <div class="shrink-0">
+                      {#if supportingCharacterPortraits[char.name]}
+                        <div class="relative">
+                          <img
+                            src={normalizeImageDataUrl(
+                              supportingCharacterPortraits[char.name],
+                            ) ?? ""}
+                            alt="{char.name} portrait"
+                            class="w-24 h-24 rounded-lg object-cover ring-1 ring-surface-600"
+                          />
+                          <button
+                            class="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
+                            onclick={() =>
+                              removeSupportingCharacterPortrait(char.name)}
+                            title="Remove portrait"
+                          >
+                            <X class="h-3 w-3" />
+                          </button>
+                        </div>
+                      {:else}
+                        <div
+                          class="w-24 h-24 rounded-lg border-2 border-dashed border-surface-600 bg-surface-800 flex items-center justify-center"
                         >
-                          {#if isGeneratingProtagonistPortrait}
-                            <Loader2 class="h-3 w-3 animate-spin" />
-                            Generating...
-                          {:else}
-                            <Wand2 class="h-3 w-3" />
-                            {protagonistPortrait ? 'Regenerate' : 'Generate'}
-                          {/if}
-                        </button>
+                          <User class="h-8 w-8 text-surface-600" />
+                        </div>
                       {/if}
+                    </div>
+
+                    <!-- Appearance Input & Generate/Upload Buttons -->
+                    <div class="flex-1 space-y-2">
+                      <div>
+                        <label
+                          class="mb-1 block text-xs font-medium text-surface-400"
+                          >Appearance (comma-separated)</label
+                        >
+                        <textarea
+                          value={supportingCharacterVisualDescriptors[
+                            char.name
+                          ] || ""}
+                          oninput={(e) => {
+                            supportingCharacterVisualDescriptors[char.name] =
+                              e.currentTarget.value;
+                            supportingCharacterVisualDescriptors = {
+                              ...supportingCharacterVisualDescriptors,
+                            };
+                          }}
+                          placeholder="e.g., short dark hair, green eyes, athletic build..."
+                          class="input text-sm min-h-[60px] resize-none"
+                          rows="2"
+                        ></textarea>
+                      </div>
+                      <div class="flex gap-2">
+                        <label
+                          class="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer"
+                        >
+                          {#if uploadingCharacterName === char.name}
+                            <Loader2 class="h-3 w-3 animate-spin" />
+                            Uploading...
+                          {:else}
+                            <ImageUp class="h-3 w-3" />
+                            Upload
+                          {/if}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            class="hidden"
+                            onchange={(e) =>
+                              handleSupportingCharacterPortraitUpload(
+                                e,
+                                char.name,
+                              )}
+                            disabled={uploadingCharacterName !== null ||
+                              generatingPortraitName !== null}
+                          />
+                        </label>
+                        {#if imageGenerationEnabled}
+                          <button
+                            class="btn btn-secondary btn-sm flex items-center gap-1"
+                            onclick={() =>
+                              generateSupportingCharacterPortrait(char.name)}
+                            disabled={generatingPortraitName !== null ||
+                              uploadingCharacterName !== null ||
+                              !(
+                                supportingCharacterVisualDescriptors[
+                                  char.name
+                                ] || ""
+                              ).trim()}
+                            title={!(
+                              supportingCharacterVisualDescriptors[char.name] ||
+                              ""
+                            ).trim()
+                              ? "Add appearance descriptors to generate"
+                              : ""}
+                          >
+                            {#if generatingPortraitName === char.name}
+                              <Loader2 class="h-3 w-3 animate-spin" />
+                              Generating...
+                            {:else}
+                              <Wand2 class="h-3 w-3" />
+                              {supportingCharacterPortraits[char.name]
+                                ? "Regenerate"
+                                : "Generate"}
+                            {/if}
+                          </button>
+                        {/if}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            {:else}
-              <div class="card bg-surface-900 border-dashed border-2 border-surface-600 p-4 text-center">
-                <p class="text-surface-400 text-sm">No protagonist created. Go back to step 5 to create one.</p>
-              </div>
-            {/if}
-
-            <!-- Supporting Character Portraits -->
-            {#if supportingCharacters.length > 0}
-              <div class="space-y-3">
-                <h4 class="text-sm font-medium text-surface-300">Supporting Characters</h4>
-                {#each supportingCharacters as char, index}
-                  <div class="card bg-surface-900 p-4 space-y-3">
-                    <div class="flex items-center justify-between">
-                      <h3 class="font-medium text-surface-100">{char.name}</h3>
-                      <span class="text-xs px-2 py-0.5 rounded bg-accent-500/20 text-accent-400">{char.role}</span>
-                    </div>
-
-                    <div class="flex gap-4">
-                      <!-- Portrait Preview -->
-                      <div class="shrink-0">
-                        {#if supportingCharacterPortraits[char.name]}
-                          <div class="relative">
-                            <img
-                              src={normalizeImageDataUrl(supportingCharacterPortraits[char.name]) ?? ''}
-                              alt="{char.name} portrait"
-                              class="w-24 h-24 rounded-lg object-cover ring-1 ring-surface-600"
-                            />
-                            <button
-                              class="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white hover:bg-red-600"
-                              onclick={() => removeSupportingCharacterPortrait(char.name)}
-                              title="Remove portrait"
-                            >
-                              <X class="h-3 w-3" />
-                            </button>
-                          </div>
-                        {:else}
-                          <div class="w-24 h-24 rounded-lg border-2 border-dashed border-surface-600 bg-surface-800 flex items-center justify-center">
-                            <User class="h-8 w-8 text-surface-600" />
-                          </div>
-                        {/if}
-                      </div>
-
-                      <!-- Appearance Input & Generate/Upload Buttons -->
-                      <div class="flex-1 space-y-2">
-                        <div>
-                          <label class="mb-1 block text-xs font-medium text-surface-400">Appearance (comma-separated)</label>
-                          <textarea
-                            value={supportingCharacterVisualDescriptors[char.name] || ''}
-                            oninput={(e) => {
-                              supportingCharacterVisualDescriptors[char.name] = e.currentTarget.value;
-                              supportingCharacterVisualDescriptors = { ...supportingCharacterVisualDescriptors };
-                            }}
-                            placeholder="e.g., short dark hair, green eyes, athletic build..."
-                            class="input text-sm min-h-[60px] resize-none"
-                            rows="2"
-                          ></textarea>
-                        </div>
-                        <div class="flex gap-2">
-                          <label class="btn btn-secondary btn-sm flex items-center gap-1 cursor-pointer">
-                            {#if uploadingCharacterName === char.name}
-                              <Loader2 class="h-3 w-3 animate-spin" />
-                              Uploading...
-                            {:else}
-                              <ImageUp class="h-3 w-3" />
-                              Upload
-                            {/if}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              class="hidden"
-                              onchange={(e) => handleSupportingCharacterPortraitUpload(e, char.name)}
-                              disabled={uploadingCharacterName !== null || generatingPortraitName !== null}
-                            />
-                          </label>
-                          {#if imageGenerationEnabled}
-                            <button
-                              class="btn btn-secondary btn-sm flex items-center gap-1"
-                              onclick={() => generateSupportingCharacterPortrait(char.name)}
-                              disabled={generatingPortraitName !== null || uploadingCharacterName !== null || !(supportingCharacterVisualDescriptors[char.name] || '').trim()}
-                              title={!(supportingCharacterVisualDescriptors[char.name] || '').trim() ? 'Add appearance descriptors to generate' : ''}
-                            >
-                              {#if generatingPortraitName === char.name}
-                                <Loader2 class="h-3 w-3 animate-spin" />
-                                Generating...
-                              {:else}
-                                <Wand2 class="h-3 w-3" />
-                                {supportingCharacterPortraits[char.name] ? 'Regenerate' : 'Generate'}
-                              {/if}
-                            </button>
-                          {/if}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            {/if}
+              {/each}
+            </div>
+          {/if}
 
           {#if !protagonist && supportingCharacters.length === 0}
-            <div class="card bg-surface-900 border-dashed border-2 border-surface-600 p-6 text-center">
-              <p class="text-surface-400">No characters created yet. Go back to step 5 to create characters.</p>
+            <div
+              class="card bg-surface-900 border-dashed border-2 border-surface-600 p-6 text-center"
+            >
+              <p class="text-surface-400">
+                No characters created yet. Go back to step 5 to create
+                characters.
+              </p>
             </div>
           {/if}
 
           <p class="text-xs text-surface-500 text-center">
-            Portraits are optional. You can skip this step and add portraits later from the Characters panel.
+            Portraits are optional. You can skip this step and add portraits
+            later from the Characters panel.
           </p>
         </div>
-
       {:else if currentStep === 7}
         <!-- Step 7: Writing Style -->
         <div class="space-y-6">
-          <p class="text-surface-400">Customize how your story will be written.</p>
+          <p class="text-surface-400">
+            Customize how your story will be written.
+          </p>
 
           <!-- POV Selection -->
           <div>
-            <label class="mb-2 block text-sm font-medium text-surface-300">Point of View</label>
+            <label class="mb-2 block text-sm font-medium text-surface-300"
+              >Point of View</label
+            >
             <div class="grid gap-2 grid-cols-3">
               {#each povOptions as option}
                 <button
                   class="card p-3 text-center transition-all"
                   class:ring-2={selectedPOV === option.id}
                   class:ring-accent-500={selectedPOV === option.id}
-                  onclick={() => selectedPOV = option.id}
+                  onclick={() => (selectedPOV = option.id)}
                 >
-                  <span class="block font-medium text-surface-100">{option.label}</span>
+                  <span class="block font-medium text-surface-100"
+                    >{option.label}</span
+                  >
                   <span class="text-xs text-surface-400">{option.example}</span>
                 </button>
               {/each}
@@ -2121,16 +2626,20 @@ function clearImport() {
 
           <!-- Tense Selection -->
           <div>
-            <label class="mb-2 block text-sm font-medium text-surface-300">Tense</label>
+            <label class="mb-2 block text-sm font-medium text-surface-300"
+              >Tense</label
+            >
             <div class="grid grid-cols-2 gap-2">
               {#each tenseOptions as option}
                 <button
                   class="card p-3 text-center transition-all"
                   class:ring-2={selectedTense === option.id}
                   class:ring-accent-500={selectedTense === option.id}
-                  onclick={() => selectedTense = option.id}
+                  onclick={() => (selectedTense = option.id)}
                 >
-                  <span class="block font-medium text-surface-100">{option.label}</span>
+                  <span class="block font-medium text-surface-100"
+                    >{option.label}</span
+                  >
                   <span class="text-xs text-surface-400">{option.example}</span>
                 </button>
               {/each}
@@ -2139,7 +2648,9 @@ function clearImport() {
 
           <!-- Tone Selection -->
           <div>
-            <label class="mb-2 block text-sm font-medium text-surface-300">Tone</label>
+            <label class="mb-2 block text-sm font-medium text-surface-300"
+              >Tone</label
+            >
             <div class="flex flex-wrap gap-2 mb-2">
               {#each tonePresets as preset}
                 <button
@@ -2149,13 +2660,13 @@ function clearImport() {
                   class:bg-surface-700={tone !== preset}
                   class:text-surface-300={tone !== preset}
                   class:hover:bg-surface-600={tone !== preset}
-                  onclick={() => tone = preset}
+                  onclick={() => (tone = preset)}
                 >
                   {preset}
                 </button>
               {/each}
             </div>
-<input
+            <input
               type="text"
               bind:value={tone}
               placeholder="Or describe your own tone..."
@@ -2171,13 +2682,15 @@ function clearImport() {
               </div>
               <div class="flex-1">
                 <div class="flex items-center justify-between">
-                  <div class="text-sm font-medium text-surface-200">Visual Prose Mode</div>
+                  <div class="text-sm font-medium text-surface-200">
+                    Visual Prose Mode
+                  </div>
                   <button
                     type="button"
                     class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface-800"
                     class:bg-accent-600={visualProseMode}
                     class:bg-surface-600={!visualProseMode}
-                    onclick={() => visualProseMode = !visualProseMode}
+                    onclick={() => (visualProseMode = !visualProseMode)}
                     role="switch"
                     aria-checked={visualProseMode}
                     aria-label="Toggle Visual Prose Mode"
@@ -2189,8 +2702,10 @@ function clearImport() {
                     ></span>
                   </button>
                 </div>
-<p class="mt-1 text-xs text-surface-400">
-                  Enable rich HTML/CSS visual output. The AI can create styled layouts, dialogue boxes, and atmospheric effects. Best for immersive, cinematic storytelling.
+                <p class="mt-1 text-xs text-surface-400">
+                  Enable rich HTML/CSS visual output. The AI can create styled
+                  layouts, dialogue boxes, and atmospheric effects. Best for
+                  immersive, cinematic storytelling.
                 </p>
               </div>
             </div>
@@ -2204,13 +2719,15 @@ function clearImport() {
               </div>
               <div class="flex-1">
                 <div class="flex items-center justify-between">
-                  <div class="text-sm font-medium text-surface-200">Inline Image Mode</div>
+                  <div class="text-sm font-medium text-surface-200">
+                    Inline Image Mode
+                  </div>
                   <button
                     type="button"
                     class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface-800"
                     class:bg-accent-600={inlineImageMode}
                     class:bg-surface-600={!inlineImageMode}
-                    onclick={() => inlineImageMode = !inlineImageMode}
+                    onclick={() => (inlineImageMode = !inlineImageMode)}
                     role="switch"
                     aria-checked={inlineImageMode}
                     aria-label="Toggle Inline Image Mode"
@@ -2223,13 +2740,14 @@ function clearImport() {
                   </button>
                 </div>
                 <p class="mt-1 text-xs text-surface-400">
-                  AI places image tags directly in the narrative. Images are generated inline where the AI decides they fit best. Requires image generation to be configured.
+                  AI places image tags directly in the narrative. Images are
+                  generated inline where the AI decides they fit best. Requires
+                  image generation to be configured.
                 </p>
               </div>
             </div>
           </div>
         </div>
-
       {:else if currentStep === 8}
         <!-- Step 8: Generate Opening -->
         <div class="space-y-4">
@@ -2238,7 +2756,9 @@ function clearImport() {
           </p>
 
           <div>
-            <label class="mb-2 block text-sm font-medium text-surface-300">Story Title</label>
+            <label class="mb-2 block text-sm font-medium text-surface-300"
+              >Story Title</label
+            >
             <input
               type="text"
               bind:value={storyTitle}
@@ -2253,7 +2773,9 @@ function clearImport() {
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <FileJson class="h-4 w-4 text-accent-400" />
-                  <h4 class="font-medium text-surface-200">Imported Opening Scene</h4>
+                  <h4 class="font-medium text-surface-200">
+                    Imported Opening Scene
+                  </h4>
                 </div>
                 <button
                   class="text-xs text-surface-400 hover:text-surface-200"
@@ -2270,18 +2792,26 @@ function clearImport() {
               <!-- Greeting Selection (if alternate greetings exist) -->
               {#if cardImportedAlternateGreetings.length > 0}
                 <div>
-                  <label class="mb-2 block text-xs font-medium text-surface-400">Select Opening</label>
+                  <label class="mb-2 block text-xs font-medium text-surface-400"
+                    >Select Opening</label
+                  >
                   <div class="flex flex-wrap gap-2">
                     <button
-                      class="px-3 py-1.5 rounded text-xs transition-colors {selectedGreetingIndex === 0 ? 'bg-accent-600 text-white' : 'bg-surface-700 text-surface-300 hover:bg-surface-600'}"
-                      onclick={() => selectedGreetingIndex = 0}
+                      class="px-3 py-1.5 rounded text-xs transition-colors {selectedGreetingIndex ===
+                      0
+                        ? 'bg-accent-600 text-white'
+                        : 'bg-surface-700 text-surface-300 hover:bg-surface-600'}"
+                      onclick={() => (selectedGreetingIndex = 0)}
                     >
                       Default
                     </button>
                     {#each cardImportedAlternateGreetings as _, i}
                       <button
-                        class="px-3 py-1.5 rounded text-xs transition-colors {selectedGreetingIndex === i + 1 ? 'bg-accent-600 text-white' : 'bg-surface-700 text-surface-300 hover:bg-surface-600'}"
-                        onclick={() => selectedGreetingIndex = i + 1}
+                        class="px-3 py-1.5 rounded text-xs transition-colors {selectedGreetingIndex ===
+                        i + 1
+                          ? 'bg-accent-600 text-white'
+                          : 'bg-surface-700 text-surface-300 hover:bg-surface-600'}"
+                        onclick={() => (selectedGreetingIndex = i + 1)}
                       >
                         Alt {i + 1}
                       </button>
@@ -2293,12 +2823,21 @@ function clearImport() {
               <!-- Preview of selected opening -->
               <div class="card bg-surface-900 p-3 max-h-48 overflow-y-auto">
                 <p class="text-sm text-surface-300 whitespace-pre-wrap">
-                  {@html styleUserPlaceholders(selectedGreetingIndex === 0 ? (cardImportedFirstMessage || '') : (cardImportedAlternateGreetings[selectedGreetingIndex - 1] || ''))}
+                  {@html styleUserPlaceholders(
+                    selectedGreetingIndex === 0
+                      ? cardImportedFirstMessage || ""
+                      : cardImportedAlternateGreetings[
+                          selectedGreetingIndex - 1
+                        ] || "",
+                  )}
                 </p>
               </div>
-              {#if (selectedGreetingIndex === 0 ? cardImportedFirstMessage : cardImportedAlternateGreetings[selectedGreetingIndex - 1])?.includes('{{user}}')}
+              {#if (selectedGreetingIndex === 0 ? cardImportedFirstMessage : cardImportedAlternateGreetings[selectedGreetingIndex - 1])?.includes("{{user}}")}
                 <p class="text-xs text-surface-500 flex items-center gap-1">
-                  <span class="inline-flex items-center px-1 py-0.5 rounded bg-primary-600/30 text-primary-300 text-[10px] font-mono border border-primary-500/40">{'{{user}}'}</span>
+                  <span
+                    class="inline-flex items-center px-1 py-0.5 rounded bg-primary-600/30 text-primary-300 text-[10px] font-mono border border-primary-500/40"
+                    >{"{{user}}"}</span
+                  >
                   will be replaced with your character's name
                 </p>
               {/if}
@@ -2306,16 +2845,23 @@ function clearImport() {
               <button
                 class="btn btn-primary btn-sm flex items-center gap-2"
                 onclick={() => {
-                  const selectedScene = selectedGreetingIndex === 0
-                    ? cardImportedFirstMessage
-                    : cardImportedAlternateGreetings[selectedGreetingIndex - 1];
+                  const selectedScene =
+                    selectedGreetingIndex === 0
+                      ? cardImportedFirstMessage
+                      : cardImportedAlternateGreetings[
+                          selectedGreetingIndex - 1
+                        ];
                   generatedOpening = {
                     title: storyTitle,
-                    scene: selectedScene || '',
+                    scene: selectedScene || "",
                     initialLocation: {
-                      name: expandedSetting?.keyLocations?.[0]?.name || 'Starting Location',
-                      description: expandedSetting?.keyLocations?.[0]?.description || 'The scene begins here.'
-                    }
+                      name:
+                        expandedSetting?.keyLocations?.[0]?.name ||
+                        "Starting Location",
+                      description:
+                        expandedSetting?.keyLocations?.[0]?.description ||
+                        "The scene begins here.",
+                    },
                   };
                 }}
               >
@@ -2326,15 +2872,19 @@ function clearImport() {
           {/if}
 
           <!-- Opening Scene Guidance (Creative Writing Mode Only) -->
-          {#if selectedMode === 'creative-writing'}
+          {#if selectedMode === "creative-writing"}
             <div class="card bg-surface-900 p-4 space-y-3">
               <div class="flex items-center gap-2">
                 <Feather class="h-4 w-4 text-secondary-400" />
-                <h4 class="font-medium text-surface-200">Opening Scene Guidance</h4>
+                <h4 class="font-medium text-surface-200">
+                  Opening Scene Guidance
+                </h4>
                 <span class="text-xs text-surface-500">(Optional)</span>
               </div>
               <p class="text-sm text-surface-400">
-                As the author, describe what you want to happen in the opening scene. Include setting details, character positions, mood, or specific events.
+                As the author, describe what you want to happen in the opening
+                scene. Include setting details, character positions, mood, or
+                specific events.
               </p>
               <textarea
                 bind:value={openingGuidance}
@@ -2357,17 +2907,25 @@ function clearImport() {
                   Generating Opening...
                 {:else}
                   <PenTool class="h-4 w-4" />
-                  {generatedOpening ? 'Regenerate Opening' : 'Generate Opening Scene'}
+                  {generatedOpening
+                    ? "Regenerate Opening"
+                    : "Generate Opening Scene"}
                 {/if}
               </button>
               {#if !generatedOpening && !isGeneratingOpening && !cardImportedFirstMessage}
-                <span class="text-sm text-amber-400">Required to begin story</span>
+                <span class="text-sm text-amber-400"
+                  >Required to begin story</span
+                >
               {:else if !generatedOpening && !isGeneratingOpening && cardImportedFirstMessage}
-                <span class="text-sm text-surface-400">Or use the imported opening above</span>
+                <span class="text-sm text-surface-400"
+                  >Or use the imported opening above</span
+                >
               {/if}
             </div>
           {:else}
-            <p class="text-sm text-surface-500">Enter a title to generate the opening scene</p>
+            <p class="text-sm text-surface-500">
+              Enter a title to generate the opening scene
+            </p>
           {/if}
 
           {#if openingError}
@@ -2381,7 +2939,7 @@ function clearImport() {
               </h3>
               <div class="prose prose-invert prose-sm max-w-none">
                 <p class="text-surface-300 whitespace-pre-wrap">
-                  {generatedOpening?.scene || ''}
+                  {generatedOpening?.scene || ""}
                 </p>
               </div>
             </div>
@@ -2391,20 +2949,41 @@ function clearImport() {
           <div class="card bg-surface-800 p-4 space-y-2 text-sm">
             <h4 class="font-medium text-surface-200">Story Summary</h4>
             <div class="grid grid-cols-2 gap-2 text-surface-400">
-              <div><strong>Mode:</strong> {selectedMode === 'adventure' ? 'Adventure' : 'Creative Writing'}</div>
-              <div><strong>Genre:</strong> {selectedGenre === 'custom' ? customGenre : selectedGenre}</div>
-              <div><strong>POV:</strong> {povOptions.find(p => p.id === selectedPOV)?.label}</div>
-              <div><strong>Tense:</strong> {tenseOptions.find(t => t.id === selectedTense)?.label}</div>
+              <div>
+                <strong>Mode:</strong>
+                {selectedMode === "adventure"
+                  ? "Adventure"
+                  : "Creative Writing"}
+              </div>
+              <div>
+                <strong>Genre:</strong>
+                {selectedGenre === "custom" ? customGenre : selectedGenre}
+              </div>
+              <div>
+                <strong>POV:</strong>
+                {povOptions.find((p) => p.id === selectedPOV)?.label}
+              </div>
+              <div>
+                <strong>Tense:</strong>
+                {tenseOptions.find((t) => t.id === selectedTense)?.label}
+              </div>
               {#if expandedSetting}
-                <div class="col-span-2"><strong>Setting:</strong> {expandedSetting.name}</div>
+                <div class="col-span-2">
+                  <strong>Setting:</strong>
+                  {expandedSetting.name}
+                </div>
               {/if}
               {#if protagonist}
-                <div class="col-span-2"><strong>Protagonist:</strong> {protagonist.name}</div>
+                <div class="col-span-2">
+                  <strong>Protagonist:</strong>
+                  {protagonist.name}
+                </div>
               {/if}
               {#if importedEntries.length > 0}
                 <div class="col-span-2 flex items-center gap-2">
                   <Book class="h-4 w-4 text-accent-400" />
-                  <strong>Lorebook:</strong> {importedEntries.length} entries to import
+                  <strong>Lorebook:</strong>
+                  {importedEntries.length} entries to import
                 </div>
               {/if}
             </div>
@@ -2428,8 +3007,10 @@ function clearImport() {
         <button
           class="btn btn-primary flex items-center gap-2"
           onclick={createStory}
-          disabled={!storyTitle.trim() || isGeneratingOpening || !generatedOpening}
-          title={!generatedOpening ? 'Generate an opening scene first' : ''}
+          disabled={!storyTitle.trim() ||
+            isGeneratingOpening ||
+            !generatedOpening}
+          title={!generatedOpening ? "Generate an opening scene first" : ""}
         >
           <Play class="h-4 w-4" />
           Begin Story
