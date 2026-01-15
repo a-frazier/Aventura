@@ -4,7 +4,7 @@
   import { templateService, BUILTIN_TEMPLATES } from '$lib/services/templates';
   import { exportService } from '$lib/services/export';
   import { ask } from '@tauri-apps/plugin-dialog';
-  import { Plus, BookOpen, Trash2, Clock, Sparkles, Wand2, Rocket, Search, Skull, Heart, FileText, Upload, Sword, Feather, User, RefreshCw } from 'lucide-svelte';
+  import { Plus, BookOpen, Trash2, Clock, Sparkles, Wand2, Rocket, Search, Skull, Heart, FileText, Upload, Sword, Feather, User, RefreshCw, Archive } from 'lucide-svelte';
   import type { Template, StoryMode, POV } from '$lib/types';
   import SetupWizard from '../wizard/SetupWizard.svelte';
 
@@ -181,6 +181,14 @@
         >
           <RefreshCw class="h-4 w-4 sm:h-5 sm:w-5" />
           <span class="hidden xs:inline">Sync</span>
+        </button>
+        <button
+          class="btn btn-secondary flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-3 sm:px-4 text-sm"
+          onclick={() => ui.setActivePanel('vault')}
+          title="Vault - Manage reusable characters and lorebooks"
+        >
+          <Archive class="h-4 w-4 sm:h-5 sm:w-5" />
+          <span class="hidden xs:inline">Vault</span>
         </button>
         <button
           class="btn btn-secondary flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-3 sm:px-4 text-sm"

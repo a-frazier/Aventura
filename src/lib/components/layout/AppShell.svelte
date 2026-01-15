@@ -8,6 +8,7 @@
   import LibraryView from '$lib/components/story/LibraryView.svelte';
   import LorebookView from '$lib/components/lorebook/LorebookView.svelte';
   import MemoryView from '$lib/components/memory/MemoryView.svelte';
+  import VaultPanel from '$lib/components/vault/VaultPanel.svelte';
   import SettingsModal from '$lib/components/settings/SettingsModal.svelte';
   import LorebookDebugPanel from '$lib/components/debug/LorebookDebugPanel.svelte';
   import DebugLogModal from '$lib/components/debug/DebugLogModal.svelte';
@@ -71,6 +72,8 @@
         <LorebookView />
       {:else if ui.activePanel === 'memory' && story.currentStory}
         <MemoryView />
+      {:else if ui.activePanel === 'vault'}
+        <VaultPanel />
       {:else if ui.activePanel === 'library' || !story.currentStory}
         <LibraryView />
       {:else if children}

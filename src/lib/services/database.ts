@@ -20,6 +20,9 @@ import type {
   TimeTracker,
   EmbeddedImage,
   EmbeddedImageStatus,
+  VaultCharacter,
+  VaultCharacterType,
+  VaultLorebook,
 } from '$lib/types';
 
 class DatabaseService {
@@ -1631,6 +1634,224 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       updatedAt: row.updated_at,
       loreManagementBlacklisted: row.lore_management_blacklisted === 1,
       branchId: row.branch_id || null,
+    };
+  }
+
+  // ===== Character Vault Operations =====
+
+  async getVaultCharacters(): Promise<VaultCharacter[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM character_vault ORDER BY favorite DESC, updated_at DESC'
+    );
+    return results.map(this.mapVaultCharacter);
+  }
+
+  async getVaultCharactersByType(type: VaultCharacterType): Promise<VaultCharacter[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM character_vault WHERE character_type = ? ORDER BY favorite DESC, updated_at DESC',
+      [type]
+    );
+    return results.map(this.mapVaultCharacter);
+  }
+
+  async getVaultCharacter(id: string): Promise<VaultCharacter | null> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM character_vault WHERE id = ?',
+      [id]
+    );
+    return results.length > 0 ? this.mapVaultCharacter(results[0]) : null;
+  }
+
+  async addVaultCharacter(character: VaultCharacter): Promise<void> {
+    const db = await this.getDb();
+    await db.execute(
+      `INSERT INTO character_vault (
+        id, name, description, character_type,
+        background, motivation, role, relationship_template,
+        traits, visual_descriptors, portrait,
+        tags, favorite, source, original_story_id, metadata,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        character.id,
+        character.name,
+        character.description,
+        character.characterType,
+        character.background,
+        character.motivation,
+        character.role,
+        character.relationshipTemplate,
+        JSON.stringify(character.traits),
+        JSON.stringify(character.visualDescriptors),
+        character.portrait,
+        JSON.stringify(character.tags),
+        character.favorite ? 1 : 0,
+        character.source,
+        character.originalStoryId,
+        character.metadata ? JSON.stringify(character.metadata) : null,
+        character.createdAt,
+        character.updatedAt,
+      ]
+    );
+  }
+
+  async updateVaultCharacter(id: string, updates: Partial<VaultCharacter>): Promise<void> {
+    const db = await this.getDb();
+    const setClauses: string[] = ['updated_at = ?'];
+    const values: any[] = [Date.now()];
+
+    if (updates.name !== undefined) { setClauses.push('name = ?'); values.push(updates.name); }
+    if (updates.description !== undefined) { setClauses.push('description = ?'); values.push(updates.description); }
+    if (updates.characterType !== undefined) { setClauses.push('character_type = ?'); values.push(updates.characterType); }
+    if (updates.background !== undefined) { setClauses.push('background = ?'); values.push(updates.background); }
+    if (updates.motivation !== undefined) { setClauses.push('motivation = ?'); values.push(updates.motivation); }
+    if (updates.role !== undefined) { setClauses.push('role = ?'); values.push(updates.role); }
+    if (updates.relationshipTemplate !== undefined) { setClauses.push('relationship_template = ?'); values.push(updates.relationshipTemplate); }
+    if (updates.traits !== undefined) { setClauses.push('traits = ?'); values.push(JSON.stringify(updates.traits)); }
+    if (updates.visualDescriptors !== undefined) { setClauses.push('visual_descriptors = ?'); values.push(JSON.stringify(updates.visualDescriptors)); }
+    if (updates.portrait !== undefined) { setClauses.push('portrait = ?'); values.push(updates.portrait); }
+    if (updates.tags !== undefined) { setClauses.push('tags = ?'); values.push(JSON.stringify(updates.tags)); }
+    if (updates.favorite !== undefined) { setClauses.push('favorite = ?'); values.push(updates.favorite ? 1 : 0); }
+    if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(updates.metadata ? JSON.stringify(updates.metadata) : null); }
+
+    values.push(id);
+    await db.execute(`UPDATE character_vault SET ${setClauses.join(', ')} WHERE id = ?`, values);
+  }
+
+  async deleteVaultCharacter(id: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM character_vault WHERE id = ?', [id]);
+  }
+
+  async searchVaultCharacters(query: string): Promise<VaultCharacter[]> {
+    const db = await this.getDb();
+    const searchPattern = `%${query}%`;
+    const results = await db.select<any[]>(
+      `SELECT * FROM character_vault WHERE 
+        name LIKE ? OR description LIKE ? OR tags LIKE ?
+      ORDER BY favorite DESC, updated_at DESC`,
+      [searchPattern, searchPattern, searchPattern]
+    );
+    return results.map(this.mapVaultCharacter);
+  }
+
+  private mapVaultCharacter(row: any): VaultCharacter {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      characterType: row.character_type,
+      background: row.background,
+      motivation: row.motivation,
+      role: row.role,
+      relationshipTemplate: row.relationship_template,
+      traits: row.traits ? JSON.parse(row.traits) : [],
+      visualDescriptors: row.visual_descriptors ? JSON.parse(row.visual_descriptors) : [],
+      portrait: row.portrait,
+      tags: row.tags ? JSON.parse(row.tags) : [],
+      favorite: row.favorite === 1,
+      source: row.source || 'manual',
+      originalStoryId: row.original_story_id,
+      metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  // ===== Lorebook Vault Operations =====
+
+  async getVaultLorebooks(): Promise<VaultLorebook[]> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM lorebook_vault ORDER BY favorite DESC, updated_at DESC'
+    );
+    return results.map(this.mapVaultLorebook);
+  }
+
+  async getVaultLorebook(id: string): Promise<VaultLorebook | null> {
+    const db = await this.getDb();
+    const results = await db.select<any[]>(
+      'SELECT * FROM lorebook_vault WHERE id = ?',
+      [id]
+    );
+    return results.length > 0 ? this.mapVaultLorebook(results[0]) : null;
+  }
+
+  async addVaultLorebook(lorebook: VaultLorebook): Promise<void> {
+    const db = await this.getDb();
+    await db.execute(
+      `INSERT INTO lorebook_vault (
+        id, name, description, entries,
+        tags, favorite, source, original_filename, original_story_id,
+        metadata, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        lorebook.id,
+        lorebook.name,
+        lorebook.description,
+        JSON.stringify(lorebook.entries),
+        JSON.stringify(lorebook.tags),
+        lorebook.favorite ? 1 : 0,
+        lorebook.source,
+        lorebook.originalFilename,
+        lorebook.originalStoryId,
+        lorebook.metadata ? JSON.stringify(lorebook.metadata) : null,
+        lorebook.createdAt,
+        lorebook.updatedAt,
+      ]
+    );
+  }
+
+  async updateVaultLorebook(id: string, updates: Partial<VaultLorebook>): Promise<void> {
+    const db = await this.getDb();
+    const setClauses: string[] = ['updated_at = ?'];
+    const values: any[] = [Date.now()];
+
+    if (updates.name !== undefined) { setClauses.push('name = ?'); values.push(updates.name); }
+    if (updates.description !== undefined) { setClauses.push('description = ?'); values.push(updates.description); }
+    if (updates.entries !== undefined) { setClauses.push('entries = ?'); values.push(JSON.stringify(updates.entries)); }
+    if (updates.tags !== undefined) { setClauses.push('tags = ?'); values.push(JSON.stringify(updates.tags)); }
+    if (updates.favorite !== undefined) { setClauses.push('favorite = ?'); values.push(updates.favorite ? 1 : 0); }
+    if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(updates.metadata ? JSON.stringify(updates.metadata) : null); }
+
+    values.push(id);
+    await db.execute(`UPDATE lorebook_vault SET ${setClauses.join(', ')} WHERE id = ?`, values);
+  }
+
+  async deleteVaultLorebook(id: string): Promise<void> {
+    const db = await this.getDb();
+    await db.execute('DELETE FROM lorebook_vault WHERE id = ?', [id]);
+  }
+
+  async searchVaultLorebooks(query: string): Promise<VaultLorebook[]> {
+    const db = await this.getDb();
+    const searchPattern = `%${query}%`;
+    const results = await db.select<any[]>(
+      `SELECT * FROM lorebook_vault WHERE 
+        name LIKE ? OR description LIKE ? OR tags LIKE ?
+      ORDER BY favorite DESC, updated_at DESC`,
+      [searchPattern, searchPattern, searchPattern]
+    );
+    return results.map(this.mapVaultLorebook);
+  }
+
+  private mapVaultLorebook(row: any): VaultLorebook {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      entries: row.entries ? JSON.parse(row.entries) : [],
+      tags: row.tags ? JSON.parse(row.tags) : [],
+      favorite: row.favorite === 1,
+      source: row.source || 'import',
+      originalFilename: row.original_filename,
+      originalStoryId: row.original_story_id,
+      metadata: row.metadata ? JSON.parse(row.metadata) : null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     };
   }
 }

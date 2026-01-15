@@ -141,6 +141,102 @@ export interface Character {
   branchId: string | null;  // Branch this character belongs to (null = main/inherited)
 }
 
+// ===== Character Vault Types =====
+
+export type VaultCharacterType = 'protagonist' | 'supporting';
+export type VaultCharacterSource = 'manual' | 'import' | 'story';
+
+/**
+ * A reusable character template stored in the global vault.
+ * Characters are copied to stories, not linked.
+ */
+export interface VaultCharacter {
+  id: string;
+  name: string;
+  description: string | null;
+
+  // Type determines which fields are relevant
+  characterType: VaultCharacterType;
+
+  // Protagonist-specific fields
+  background: string | null;   // Backstory for protagonist wizard step
+  motivation: string | null;   // Goals/drives for protagonist wizard step
+
+  // Supporting-specific fields
+  role: string | null;         // e.g., "Mentor", "Rival", "Love Interest"
+  relationshipTemplate: string | null;  // Default relationship when added
+
+  // Common fields (same as Character)
+  traits: string[];
+  visualDescriptors: string[];
+  portrait: string | null;  // Data URL
+
+  // Organization
+  tags: string[];
+  favorite: boolean;
+
+  // Provenance
+  source: VaultCharacterSource;
+  originalStoryId: string | null;  // If saved from a story
+  metadata: Record<string, unknown> | null;
+
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ===== Lorebook Vault Types =====
+
+export type VaultLorebookSource = 'import' | 'story' | 'manual';
+
+export interface VaultLorebookMetadata {
+  format: 'aventura' | 'sillytavern' | 'unknown';
+  totalEntries: number;
+  entryBreakdown: Record<EntryType, number>;
+}
+
+/**
+ * A reusable lorebook stored in the global vault.
+ * Contains processed ImportedEntry[] that can be copied to stories.
+ */
+export interface VaultLorebook {
+  id: string;
+  name: string;
+  description: string | null;
+
+  // Processed entries (from LorebookImportResult)
+  entries: VaultLorebookEntry[];
+
+  // Organization
+  tags: string[];
+  favorite: boolean;
+
+  // Provenance
+  source: VaultLorebookSource;
+  originalFilename: string | null;
+  originalStoryId: string | null;
+
+  // Metadata
+  metadata: VaultLorebookMetadata | null;
+
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * A lorebook entry stored in the vault.
+ * Similar to ImportedEntry but without originalData for cleaner storage.
+ */
+export interface VaultLorebookEntry {
+  name: string;
+  type: EntryType;
+  description: string;
+  keywords: string[];
+  injectionMode: EntryInjectionMode;
+  priority: number;
+  disabled: boolean;
+  group: string | null;
+}
+
 export interface Location {
   id: string;
   storyId: string;
@@ -455,7 +551,7 @@ export interface AgenticSession {
 }
 
 // UI State types
-export type ActivePanel = 'story' | 'library' | 'settings' | 'templates' | 'lorebook' | 'memory';
+export type ActivePanel = 'story' | 'library' | 'settings' | 'templates' | 'lorebook' | 'memory' | 'vault';
 export type SidebarTab = 'characters' | 'locations' | 'inventory' | 'quests' | 'time' | 'branches';
 
 export interface UIState {
