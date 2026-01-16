@@ -1580,13 +1580,23 @@
       </div>
 
       {#if ui.isGenerating}
-        <button
-          onclick={handleStopGeneration}
-          class="btn btn-primary bg-red-600 hover:bg-red-700 h-11 w-11 p-0 flex items-center justify-center rounded-xl mb-0.5 transition-transform active:scale-95"
-          title="Stop generation"
-        >
-          <Square class="h-5 w-5 fill-current" />
-        </button>
+        {#if !ui.isRetryingLastMessage}
+          <button
+            onclick={handleStopGeneration}
+            class="btn h-11 w-11 p-0 flex items-center justify-center rounded-xl mb-0.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-transform active:scale-95"
+            title="Stop generation"
+          >
+            <Square class="h-5 w-5" />
+          </button>
+        {:else}
+          <button
+            disabled
+            class="btn h-11 w-11 p-0 flex items-center justify-center rounded-xl mb-0.5 bg-red-500/20 text-red-400 opacity-50 cursor-not-allowed shadow-none"
+            title="Stop disabled during retry"
+          >
+            <Square class="h-5 w-5" />
+          </button>
+        {/if}
       {:else}
         <button
           onclick={handleSubmit}
