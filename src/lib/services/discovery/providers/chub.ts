@@ -11,9 +11,9 @@ export class ChubProvider implements DiscoveryProvider {
   id = 'chub';
   name = 'Chub.ai';
   icon = 'https://avatars.charhub.io/icons/assets/full_logo.png';
-  supports: ('character' | 'lorebook')[] = ['character', 'lorebook'];
+  supports: ('character' | 'lorebook' | 'scenario')[] = ['character', 'lorebook', 'scenario'];
 
-  async search(options: SearchOptions, type: 'character' | 'lorebook'): Promise<SearchResult> {
+  async search(options: SearchOptions, type: 'character' | 'lorebook' | 'scenario'): Promise<SearchResult> {
     const namespace = type === 'lorebook' ? 'lorebooks' : 'characters';
     const sortMap: Record<string, string> = {
       popular: 'download_count',
@@ -73,7 +73,7 @@ export class ChubProvider implements DiscoveryProvider {
     };
   }
 
-  private transformCard(node: any, type: 'character' | 'lorebook'): DiscoveryCard {
+  private transformCard(node: any, type: 'character' | 'lorebook' | 'scenario'): DiscoveryCard {
     let fullPath = node.fullPath || node.name || '';
     if (type === 'lorebook' && fullPath.startsWith('lorebooks/')) {
       fullPath = fullPath.substring('lorebooks/'.length);
@@ -83,6 +83,7 @@ export class ChubProvider implements DiscoveryProvider {
     const hasNsfwTag = (node.topics || []).some((t: string) => t.toLowerCase() === 'nsfw');
     const isNsfw = node.nsfw_image || node.nsfw || hasNsfwTag;
 
+    // Use character image for scenarios too
     const avatarBase = type === 'lorebook'
       ? `https://avatars.charhub.io/avatars/lorebooks/${fullPath}/avatar.webp`
       : `https://avatars.charhub.io/avatars/${fullPath}/chara_card_v2.png`;
@@ -100,7 +101,7 @@ export class ChubProvider implements DiscoveryProvider {
         rating: node.starCount || 0
       },
       source: 'chub',
-      type,
+      type: type === 'scenario' ? 'character' : type, // Normalize scenario to character type for card logic
       nsfw: isNsfw,
       raw: {
         ...node,

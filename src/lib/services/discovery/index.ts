@@ -13,7 +13,7 @@ interface ProviderPaginationState {
 class DiscoveryService {
   private providers: Map<string, DiscoveryProvider> = new Map();
   private allModeState: Map<string, ProviderPaginationState> = new Map();
-  private lastAllModeOptions: { query: string; tags?: string[]; type: 'character' | 'lorebook' } | null = null;
+  private lastAllModeOptions: { query: string; tags?: string[]; type: 'character' | 'lorebook' | 'scenario' } | null = null;
 
   constructor() {
     this.registerProvider(new ChubProvider());
@@ -29,7 +29,7 @@ class DiscoveryService {
     return this.providers.get(id);
   }
 
-  getProviders(type?: 'character' | 'lorebook'): DiscoveryProvider[] {
+  getProviders(type?: 'character' | 'lorebook' | 'scenario'): DiscoveryProvider[] {
     const all = Array.from(this.providers.values());
     if (!type) return all;
     return all.filter((p) => p.supports.includes(type));
@@ -38,7 +38,7 @@ class DiscoveryService {
   async search(
     providerId: string,
     options: SearchOptions,
-    type: 'character' | 'lorebook'
+    type: 'character' | 'lorebook' | 'scenario'
   ): Promise<SearchResult> {
     const provider = this.providers.get(providerId);
     if (!provider) {
@@ -56,7 +56,7 @@ class DiscoveryService {
    */
   async searchAll(
     options: SearchOptions,
-    type: 'character' | 'lorebook'
+    type: 'character' | 'lorebook' | 'scenario'
   ): Promise<SearchResult> {
     const providers = this.getProviders(type);
     
@@ -114,7 +114,7 @@ class DiscoveryService {
    * Load more results from all providers that still have results
    */
   async loadMoreAll(
-    type: 'character' | 'lorebook',
+    type: 'character' | 'lorebook' | 'scenario',
     limit: number = 48
   ): Promise<SearchResult> {
     if (!this.lastAllModeOptions || this.lastAllModeOptions.type !== type) {
@@ -218,7 +218,7 @@ class DiscoveryService {
   /**
    * Get tags from all providers (combined and deduplicated)
    */
-  async getAllTags(type?: 'character' | 'lorebook'): Promise<string[]> {
+  async getAllTags(type?: 'character' | 'lorebook' | 'scenario'): Promise<string[]> {
     const providers = this.getProviders(type);
     
     // Fetch tags from all providers in parallel

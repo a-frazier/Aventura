@@ -62,9 +62,9 @@ export class JannyProvider implements DiscoveryProvider {
   id = 'janny';
   name = 'JannyAI';
   icon = 'https://tse3.mm.bing.net/th/id/OIP.nb-qi0od9W6zRsskVwL6QAHaHa';
-  supports: ('character' | 'lorebook')[] = ['character'];
+  supports: ('character' | 'lorebook' | 'scenario')[] = ['character', 'scenario'];
 
-  async search(options: SearchOptions, type: 'character' | 'lorebook'): Promise<SearchResult> {
+  async search(options: SearchOptions, type: 'character' | 'lorebook' | 'scenario'): Promise<SearchResult> {
     if (type === 'lorebook') {
       return { cards: [], hasMore: false };
     }
@@ -117,7 +117,7 @@ export class JannyProvider implements DiscoveryProvider {
     const results = data?.results?.[0] || {};
     const hits = results.hits || [];
 
-    const cards = hits.map((hit: any) => this.transformCard(hit));
+    const cards = hits.map((hit: any) => this.transformCard(hit, type));
     const hasMore = hits.length >= (options.limit || 40);
 
     return {
@@ -127,7 +127,7 @@ export class JannyProvider implements DiscoveryProvider {
     };
   }
 
-  private transformCard(hit: any): DiscoveryCard {
+  private transformCard(hit: any, type: 'character' | 'lorebook' | 'scenario'): DiscoveryCard {
     const tags = (hit.tagIds || []).map((id: number) => JANNYAI_TAGS[id] || `Tag ${id}`);
     if (hit.isNsfw && !tags.includes('NSFW')) {
       tags.unshift('NSFW');
@@ -155,7 +155,7 @@ export class JannyProvider implements DiscoveryProvider {
         downloads: hit.stats?.chatCount || 0
       },
       source: 'janny',
-      type: 'character',
+      type: type === 'scenario' ? 'character' : type, // Normalize scenario to character
       nsfw: hit.isNsfw || false,
       raw: { ...hit, slug, pageUrl }
     };

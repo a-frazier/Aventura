@@ -4,10 +4,11 @@
   import DiscoveryCardComponent from './DiscoveryCard.svelte';
   import { characterVault } from '$lib/stores/characterVault.svelte';
   import { lorebookVault } from '$lib/stores/lorebookVault.svelte';
+  import { scenarioVault } from '$lib/stores/scenarioVault.svelte';
 
   interface Props {
     isOpen: boolean;
-    mode: 'character' | 'lorebook';
+    mode: 'character' | 'lorebook' | 'scenario';
     onClose: () => void;
   }
 
@@ -46,9 +47,13 @@
       for (const c of characterVault.characters) {
         if (c.metadata?.sourceUrl) urls.add(String(c.metadata.sourceUrl));
       }
-    } else {
+    } else if (mode === 'lorebook') {
       for (const lb of lorebookVault.lorebooks) {
         if (lb.metadata?.sourceUrl) urls.add(String(lb.metadata.sourceUrl));
+      }
+    } else if (mode === 'scenario') {
+      for (const s of scenarioVault.scenarios) {
+        if (s.metadata?.sourceUrl) urls.add(String(s.metadata.sourceUrl));
       }
     }
     return urls;
@@ -217,8 +222,10 @@
     try {
       if (mode === 'character') {
         await characterVault.importFromDiscovery(card);
-      } else {
+      } else if (mode === 'lorebook') {
         await lorebookVault.importFromDiscovery(card);
+      } else if (mode === 'scenario') {
+        await scenarioVault.importFromDiscovery(card);
       }
       console.log('[Discovery] Started background import:', card.name);
     } catch (error) {
@@ -290,7 +297,7 @@
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-surface-700 px-4 py-3">
       <h2 class="text-lg font-semibold text-surface-100">
-        Browse {mode === 'character' ? 'Characters' : 'Lorebooks'}
+        Browse {mode === 'character' ? 'Characters' : mode === 'lorebook' ? 'Lorebooks' : 'Scenarios'}
       </h2>
       <button
         onclick={onClose}
@@ -585,7 +592,7 @@
       {#if results.length === 0 && !isLoading}
         <div class="flex h-full flex-col items-center justify-center text-surface-500">
           <Search class="mb-2 h-12 w-12 opacity-50" />
-          <p>Search to discover {mode === 'character' ? 'characters' : 'lorebooks'}</p>
+          <p>Search to discover {mode === 'character' ? 'characters' : mode === 'lorebook' ? 'lorebooks' : 'scenarios'}</p>
           {#if activeProviderId === 'all'}
             <p class="mt-1 text-xs text-surface-600">Searching across all available sources</p>
           {/if}

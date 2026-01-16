@@ -12,7 +12,7 @@ export interface DiscoveryCard {
     views?: number;
   };
   source: string; // 'chub', 'janny', etc.
-  type: 'character' | 'lorebook';
+  type: 'character' | 'lorebook' | 'scenario';
   nsfw: boolean;
   raw?: any; // Original data for debugging/advanced usage
 }
@@ -36,8 +36,8 @@ export interface DiscoveryProvider {
   id: string;
   name: string;
   icon?: string;
-  supports: ('character' | 'lorebook')[];
-  search(options: SearchOptions, type: 'character' | 'lorebook'): Promise<SearchResult>;
+  supports: ('character' | 'lorebook' | 'scenario')[];
+  search(options: SearchOptions, type: 'character' | 'lorebook' | 'scenario'): Promise<SearchResult>;
   getDownloadUrl(card: DiscoveryCard): Promise<string>;
   // Some providers might require specific headers or fetch logic for the download
   downloadCard(card: DiscoveryCard): Promise<Blob>;
