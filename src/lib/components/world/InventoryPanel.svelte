@@ -270,7 +270,7 @@
                 </button>
               {/if}
               <button
-                class="sm:btn-ghost rounded text-xs text-accent-400 hover:text-accent-300"
+                class="sm:btn-ghost ml-2 rounded text-xs text-accent-400 hover:text-accent-300"
                 onclick={() => beginDrop(item)}
                 title="Drop item"
               >
@@ -453,7 +453,7 @@
                 </button>
               {/if}
               <button
-                class="sm:btn-ghost rounded text-xs text-accent-400 hover:text-accent-300"
+                class="sm:btn-ghost ml-2 rounded text-xs text-accent-400 hover:text-accent-300"
                 onclick={() => beginDrop(item)}
                 title="Drop item"
               >
