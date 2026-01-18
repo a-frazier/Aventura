@@ -2,6 +2,7 @@ import type { OpenAIProvider as OpenAIProvider } from './openrouter';
 import type { StoryEntry, Character, Location, Item, StoryBeat, Entry, GenerationPreset } from '$lib/types';
 import { settings } from '$lib/stores/settings.svelte';
 import { buildExtraBody } from './requestOverrides';
+import { promptService, type PromptContext } from '$lib/services/prompts';
 
 const DEBUG = true;
 
@@ -154,56 +155,34 @@ Match their vocabulary, tone, and phrasing patterns.`;
     const protagonistName = protagonist?.name || 'the player';
     const protagonistDesc = protagonist?.description ? ` (${protagonist.description})` : '';
 
-    const prompt = `Based on the current story moment, generate 3-4 RPG-style action choices.
+    // Build length instruction
+    const lengthInstruction = userActions.length > 0
+      ? `Match the length of the user's actions (~${Math.round(userActions.reduce((sum, a) => sum + a.split(' ').length, 0) / userActions.length)} words). They should feel like something the user would actually write.`
+      : 'Keep each choice SHORT (under 10 words ideally, max 15). They should be clear, specific actions the USER can take.';
 
-## CRITICAL: Who is the Player?
-The USER is playing as ${protagonistName}${protagonistDesc}. This is the USER'S persona/character - it IS the user, not a separate NPC.
-When generating action choices, you are suggesting what THE USER might want to do next as their character ${protagonistName}.
-Do NOT generate actions for ${protagonistName} as if they were a separate character - these are suggestions for the user's next move.
-${styleGuidance}
+    // Build prompt context
+    const promptContext: PromptContext = {
+      mode: 'adventure',
+      pov: pov || 'second',
+      tense: 'present',
+      protagonistName,
+    };
 
-## Current Narrative
-"""
-${narrativeResponse}
-"""
-
-## Recent Context
-${recentContext}
-
-## Current Scene
-Location: ${currentLoc?.name || 'Unknown'}${currentLoc?.description ? ` - ${currentLoc.description}` : ''}
-NPCs Present: ${activeCharacters.length > 0 ? activeCharacters.map(c => c.name).join(', ') : 'None'}
-${protagonistName}'s Inventory: ${inventoryItems.length > 0 ? inventoryItems.map(i => i.name).join(', ') : 'Empty'}
-Active Quests: ${activeQuests.length > 0 ? activeQuests.map(q => q.title).join(', ') : 'None'}
-${lorebookContext}
-## Your Task
-Generate 3-4 distinct action choices for THE USER (playing as ${protagonistName}). Think like an RPG:
-- **Every choice should move the plot forward** - no passive waiting or stalling
-- Include at least one physical action (examine, take, use, attack, etc.)
-- If NPCs are present, include a dialogue option for the user to talk to them
-- If there's an obvious next step or quest objective, include it
-- Include an exploratory or investigative option that advances understanding
-
-Avoid choices like "Wait and see" or "Do nothing" - each option should lead to meaningful story progression.
-
-${povInstruction}
-
-${userActions.length > 0 ? `Match the length of the user's actions (~${Math.round(userActions.reduce((sum, a) => sum + a.split(' ').length, 0) / userActions.length)} words). They should feel like something the user would actually write.` : 'Keep each choice SHORT (under 10 words ideally, max 15). They should be clear, specific actions the USER can take.'}
-
-## Response Format (JSON only)
-{
-  "choices": [
-    {"text": "Action text here", "type": "action|dialogue|examine|move"},
-    {"text": "Action text here", "type": "action|dialogue|examine|move"},
-    {"text": "Action text here", "type": "action|dialogue|examine|move"}
-  ]
-}
-
-Types:
-- action: Physical actions (fight, take, use, give, etc.)
-- dialogue: Speaking to someone
-- examine: Looking at or investigating something
-- move: Going somewhere or leaving`;
+    // Use centralized prompt system
+    const prompt = promptService.renderUserPrompt('action-choices', promptContext, {
+      protagonistName,
+      protagonistDescription: protagonistDesc,
+      styleGuidance,
+      narrativeResponse,
+      recentContext,
+      currentLocation: `${currentLoc?.name || 'Unknown'}${currentLoc?.description ? ` - ${currentLoc.description}` : ''}`,
+      npcsPresent: activeCharacters.length > 0 ? activeCharacters.map(c => c.name).join(', ') : 'None',
+      inventory: inventoryItems.length > 0 ? inventoryItems.map(i => i.name).join(', ') : 'Empty',
+      activeQuests: activeQuests.length > 0 ? activeQuests.map(q => q.title).join(', ') : 'None',
+      lorebookContext,
+      povInstruction,
+      lengthInstruction,
+    });
 
     try {
       const response = await this.provider.generateResponse({
@@ -211,7 +190,7 @@ Types:
         messages: [
           {
             role: 'system',
-            content: `You are an RPG game master generating action choices for a player. The player has a character/persona that represents THEM in the story - when you generate choices, these are suggestions for what the PLAYER (the real person) might want their character to do next. Generate action options that fit to current narrative moment and MATCH THE PLAYER'S WRITING STYLE - if they write verbose actions, generate verbose choices; if they write terse commands, generate terse choices. Mimic their vocabulary, phrasing, and tone. Always respond with valid JSON only.`,
+            content: promptService.renderPrompt('action-choices', promptContext),
           },
           { role: 'user', content: prompt },
         ],

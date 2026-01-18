@@ -353,23 +353,10 @@ const LORE_MANAGEMENT_TOOLS: Tool[] = [
   },
 ];
 
-// Default system prompt for Lore Management Mode
-export const DEFAULT_LORE_MANAGEMENT_PROMPT = `You are a lore manager for an interactive story. Your job is to maintain a consistent, comprehensive database of story elements.
-
-Your tasks:
-1. Identify important characters, locations, items, factions, and concepts that appear in the story but have no entry
-2. Find entries that are outdated or incomplete based on story events
-3. Identify redundant entries that should be merged
-4. Update relationship statuses and character states
-
-Guidelines:
-- Be conservative - only create entries for elements that are genuinely important to the story
-- Use exact names from the story text
-- When merging, combine all relevant information
-- Focus on facts that would help maintain story consistency
-- Prefer targeted updates (e.g., search/replace) instead of rewriting long descriptions
-
-Use your tools to review the story and make necessary changes. When finished, call finish_lore_management with a summary.`;
+// NOTE: The default system prompt for Lore Management is now in the centralized
+// prompt system at src/lib/services/prompts/definitions.ts (template id: 'lore-management')
+// The systemPrompt field in LoreManagementSettings is kept for backwards compatibility
+// with user-customized settings, but the actual prompt is rendered via promptService.
 
 interface LoreManagementContext {
   entries: Entry[];
@@ -1026,7 +1013,7 @@ export function getDefaultLoreManagementSettings(): LoreManagementSettings {
     model: 'minimax/minimax-m2.1', // Good for agentic tool calling with reasoning
     temperature: 0.3,
     maxIterations: 50,
-    systemPrompt: DEFAULT_LORE_MANAGEMENT_PROMPT,
+    systemPrompt: '', // Uses centralized prompt system (template id: 'lore-management')
     reasoningEffort: 'high',
     providerOnly: ['minimax'],
     manualBody: '',

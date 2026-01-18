@@ -12,6 +12,7 @@ import type { Entry, EntryType, StoryEntry, Character, Location, Item, Generatio
 import type { OpenAIProvider as OpenAIProvider } from './openrouter';
 import { settings } from '$lib/stores/settings.svelte';
 import { buildExtraBody } from './requestOverrides';
+import { promptService, type PromptContext } from '$lib/services/prompts';
 
 /**
  * Live world state - the actively tracked entities that should always be Tier 1
@@ -573,28 +574,20 @@ export class EntryRetrievalService {
       })
       .join('\n');
 
-    const prompt = `You are a lorebook retrieval system. These entries were NOT matched by keyword search. Your job is to select any that are still relevant to the current scene.
+    // Build prompt context for the centralized system
+    const promptContext: PromptContext = {
+      mode: 'adventure',
+      pov: 'second',
+      tense: 'present',
+      protagonistName: 'the protagonist',
+    };
 
-## Current Scene
-${recentContent || '(Story just started)'}
-
-## User's Next Action
-"${userInput}"
-
-## Available Lorebook Entries (not keyword-matched)
-${entryList}
-
-## Instructions
-Select entries that are contextually relevant even though they weren't keyword-matched. Include entries if they:
-- Describe background lore, magic systems, or world rules that apply
-- Are thematically connected to the current situation
-- Provide context that would help the narrator
-- Describe factions, organizations, or history relevant to current events
-
-Be selective - these entries didn't match keywords, so only include ones with genuine contextual relevance.
-
-Return ONLY a JSON array of numbers: [1, 2, 3, ...]
-Return an empty array [] if none are relevant.`;
+    // Use centralized prompt system
+    const prompt = promptService.renderUserPrompt('tier3-entry-selection', promptContext, {
+      recentContent: recentContent || '(Story just started)',
+      userInput,
+      entrySummaries: entryList,
+    });
 
     try {
       const response = await this.provider.generateResponse({

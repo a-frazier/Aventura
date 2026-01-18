@@ -720,6 +720,13 @@ export const CONTEXT_PLACEHOLDERS: ContextPlaceholder[] = [
 
   // Tier 3 Entry Selection
   { id: 'entry-summaries', name: 'Entry Summaries', token: 'entrySummaries', category: 'service', description: 'Numbered list of available lorebook entries for Tier 3 selection' },
+
+  // Action Choices service
+  { id: 'style-guidance', name: 'Style Guidance', token: 'styleGuidance', category: 'service', description: 'Instructions for matching the user\'s writing style based on their recent actions' },
+  { id: 'npcs-present', name: 'NPCs Present', token: 'npcsPresent', category: 'service', description: 'List of NPC names currently present in the scene' },
+  { id: 'inventory', name: 'Inventory', token: 'inventory', category: 'service', description: 'List of items in the protagonist\'s inventory' },
+  { id: 'active-quests', name: 'Active Quests', token: 'activeQuests', category: 'service', description: 'List of currently active quests/story beats' },
+  { id: 'length-instruction', name: 'Length Instruction', token: 'lengthInstruction', category: 'service', description: 'Instructions for action choice length based on user\'s writing patterns' },
 ];
 
 /**
@@ -2549,6 +2556,65 @@ const imagePortraitGenerationTemplate: PromptTemplate = {
   userContent: '',
 };
 
+// Action choices template - generates RPG-style action choices for adventure mode
+const actionChoicesPromptTemplate: PromptTemplate = {
+  id: 'action-choices',
+  name: 'Action Choices',
+  category: 'service',
+  description: 'Generates RPG-style action choices for the player based on current narrative',
+  content: `You are an RPG game master generating action choices for a player. The player has a character/persona that represents THEM in the story - when you generate choices, these are suggestions for what the PLAYER (the real person) might want their character to do next. Generate action options that fit the current narrative moment and MATCH THE PLAYER'S WRITING STYLE - if they write verbose actions, generate verbose choices; if they write terse commands, generate terse choices. Mimic their vocabulary, phrasing, and tone. Always respond with valid JSON only.`,
+  userContent: `Based on the current story moment, generate 3-4 RPG-style action choices.
+
+## CRITICAL: Who is the Player?
+The USER is playing as {{protagonistName}}{{protagonistDescription}}. This is the USER'S persona/character - it IS the user, not a separate NPC.
+When generating action choices, you are suggesting what THE USER might want to do next as their character {{protagonistName}}.
+Do NOT generate actions for {{protagonistName}} as if they were a separate character - these are suggestions for the user's next move.
+{{styleGuidance}}
+
+## Current Narrative
+"""
+{{narrativeResponse}}
+"""
+
+## Recent Context
+{{recentContext}}
+
+## Current Scene
+Location: {{currentLocation}}
+NPCs Present: {{npcsPresent}}
+{{protagonistName}}'s Inventory: {{inventory}}
+Active Quests: {{activeQuests}}
+{{lorebookContext}}
+## Your Task
+Generate 3-4 distinct action choices for THE USER (playing as {{protagonistName}}). Think like an RPG:
+- **Every choice should move the plot forward** - no passive waiting or stalling
+- Include at least one physical action (examine, take, use, attack, etc.)
+- If NPCs are present, include a dialogue option for the user to talk to them
+- If there's an obvious next step or quest objective, include it
+- Include an exploratory or investigative option that advances understanding
+
+Avoid choices like "Wait and see" or "Do nothing" - each option should lead to meaningful story progression.
+
+{{povInstruction}}
+
+{{lengthInstruction}}
+
+## Response Format (JSON only)
+{
+  "choices": [
+    {"text": "Action text here", "type": "action|dialogue|examine|move"},
+    {"text": "Action text here", "type": "action|dialogue|examine|move"},
+    {"text": "Action text here", "type": "action|dialogue|examine|move"}
+  ]
+}
+
+Types:
+- action: Physical actions (fight, take, use, give, etc.)
+- dialogue: Speaking to someone
+- examine: Looking at or investigating something
+- move: Going somewhere or leaving`,
+};
+
 // ============================================================================
 // COMBINED PROMPT TEMPLATES
 // ============================================================================
@@ -2576,6 +2642,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   imagePromptAnalysisTemplate,
   imagePromptAnalysisReferenceTemplate,
   imagePortraitGenerationTemplate,
+  actionChoicesPromptTemplate,
   // Wizard prompts
   settingExpansionPromptTemplate,
   settingRefinementPromptTemplate,

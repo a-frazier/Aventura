@@ -48,117 +48,17 @@ export interface AdvancedWizardSettings {
   openingRefinement: ProcessSettings;
 }
 
-// Legacy default prompts - kept for backwards compatibility with stored settings
-// The actual prompts used are in src/lib/services/prompts/definitions.ts
-export const DEFAULT_PROMPTS = {
-  settingExpansion: `You are a world-building expert creating settings for interactive fiction. Generate rich, evocative settings that inspire creative storytelling.
-
-You MUST respond with valid JSON matching this exact schema:
-{
-  "name": "string - a memorable name for this setting/world",
-  "description": "string - 2-3 paragraphs describing the world, its rules, and atmosphere",
-  "keyLocations": [
-    { "name": "string", "description": "string - 1-2 sentences" }
-  ],
-  "atmosphere": "string - the overall mood and feeling of this world",
-  "themes": ["string array - 3-5 themes this setting explores"],
-  "potentialConflicts": ["string array - 3-5 story hooks or conflicts"]
-}
-
-Be creative but grounded. Make the setting feel lived-in and full of story potential.`,
-
-  characterElaboration: `You are a character development expert. The user has provided some details about their character. Your job is to elaborate and enrich these details while staying true to their vision.
-
-You MUST respond with valid JSON matching this exact schema:
-{
-  "name": "string - keep the user's name if provided, or suggest one if not",
-  "description": "string - 2-3 sentences expanding on who they are",
-  "background": "string - 2-3 sentences about their history, elaborating on what the user provided",
-  "motivation": "string - what drives them, expanding on the user's input",
-  "traits": ["string array - 4-5 personality traits, incorporating any the user mentioned"],
-  "appearance": "string - brief physical description if not provided"
-}
-
-Rules:
-- Preserve everything the user specified - don't contradict or replace their ideas
-- Add depth and detail to flesh out what they provided
-- Fill in gaps they left blank with fitting suggestions`,
-
-  protagonistGeneration: `You are a character creation expert for interactive fiction. Create compelling protagonists that readers will want to embody or follow.
-
-You MUST respond with valid JSON matching this exact schema:
-{
-  "name": "string - a fitting name for this character (or leave generic if POV is second person)",
-  "description": "string - 1-2 sentences about who they are",
-  "background": "string - 2-3 sentences about their history",
-  "motivation": "string - what drives them, what they want",
-  "traits": ["string array - 3-5 personality traits"],
-  "appearance": "string - brief physical description (optional for 2nd person)"
-}
-
-Create a protagonist that fits naturally into the setting and has interesting story potential.`,
-
-  supportingCharacters: `You are a character creation expert. Create compelling supporting characters that complement the protagonist and drive story conflict.
-
-You MUST respond with valid JSON: an array of character objects:
-[
-  {
-    "name": "string",
-    "role": "string - their role in the story (ally, antagonist, mentor, love interest, etc.)",
-    "description": "string - 1-2 sentences about who they are",
-    "relationship": "string - their relationship to the protagonist",
-    "traits": ["string array - 2-4 personality traits"]
-  }
-]
-
-Create diverse characters with different roles and personalities.`,
-
-  openingGeneration: `You are crafting the opening scene of an interactive story.
-
-<critical_constraints>
-# ABSOLUTE RULES - VIOLATION IS FAILURE
-1. **NEVER write what the protagonist does** - no actions, movements, or gestures
-2. **NEVER write what the protagonist says** - no dialogue or speech
-3. **NEVER write what the protagonist thinks or feels** - no internal states, emotions, or reactions
-4. **NEVER write what the protagonist perceives** - avoid "you see", "you notice", "you hear" constructions
-5. **Only describe the environment, NPCs, and situation** - let the protagonist decide how to engage
-</critical_constraints>
-
-<what_to_write>
-Write ONLY:
-- The physical environment (sights, sounds, smells, textures)
-- What NPCs are doing, saying, or how they're positioned
-- Objects, details, and atmosphere of the scene
-- Tension, stakes, or interesting elements present
-</what_to_write>
-
-<ending>
-End by presenting a situation that naturally invites the protagonist to act:
-- An NPC looking expectantly, mid-conversation
-- A door ajar, a sound from within
-- An object of interest within reach
-- A choice point or moment of tension
-
-NO questions. NO "What do you do?" Just the pregnant moment.
-</ending>
-
-Respond with valid JSON:
-{
-  "scene": "string - the opening (2-3 paragraphs describing environment/situation)",
-  "title": "string - story title",
-  "initialLocation": {
-    "name": "string - location name",
-    "description": "string - 1-2 sentences"
-  }
-}`,
-};
+// NOTE: All wizard prompts are now in the centralized prompt system at
+// src/lib/services/prompts/definitions.ts. The systemPrompt fields in
+// ProcessSettings are kept for backwards compatibility with user-customized
+// settings, but the actual prompts are rendered via promptService.
 
 export function getDefaultAdvancedSettings(): AdvancedWizardSettings {
   return {
     settingExpansion: {
       profileId: DEFAULT_OPENROUTER_PROFILE_ID,
       model: 'deepseek/deepseek-v3.2', // deepseek for world elaboration
-      systemPrompt: DEFAULT_PROMPTS.settingExpansion,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -180,7 +80,7 @@ export function getDefaultAdvancedSettings(): AdvancedWizardSettings {
     protagonistGeneration: {
       profileId: DEFAULT_OPENROUTER_PROFILE_ID,
       model: 'deepseek/deepseek-v3.2', // deepseek for protagonist generation
-      systemPrompt: DEFAULT_PROMPTS.protagonistGeneration,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -191,7 +91,7 @@ export function getDefaultAdvancedSettings(): AdvancedWizardSettings {
     characterElaboration: {
       profileId: DEFAULT_OPENROUTER_PROFILE_ID,
       model: 'deepseek/deepseek-v3.2', // deepseek for character elaboration
-      systemPrompt: DEFAULT_PROMPTS.characterElaboration,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -213,7 +113,7 @@ export function getDefaultAdvancedSettings(): AdvancedWizardSettings {
     supportingCharacters: {
       profileId: DEFAULT_OPENROUTER_PROFILE_ID,
       model: SCENARIO_MODEL, // deepseek for supporting characters
-      systemPrompt: DEFAULT_PROMPTS.supportingCharacters,
+      systemPrompt: '',
       temperature: 0.3,
       maxTokens: 8192,
       reasoningEffort: 'off',
@@ -266,7 +166,7 @@ export function getDefaultAdvancedSettingsForProvider(provider: ProviderPreset, 
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
       model: generalModel,
-      systemPrompt: DEFAULT_PROMPTS.settingExpansion,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -290,7 +190,7 @@ export function getDefaultAdvancedSettingsForProvider(provider: ProviderPreset, 
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
       model: generalModel,
-      systemPrompt: DEFAULT_PROMPTS.protagonistGeneration,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -302,7 +202,7 @@ export function getDefaultAdvancedSettingsForProvider(provider: ProviderPreset, 
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
       model: generalModel,
-      systemPrompt: DEFAULT_PROMPTS.characterElaboration,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -326,7 +226,7 @@ export function getDefaultAdvancedSettingsForProvider(provider: ProviderPreset, 
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
       model: generalModel,
-      systemPrompt: DEFAULT_PROMPTS.supportingCharacters,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
@@ -338,7 +238,7 @@ export function getDefaultAdvancedSettingsForProvider(provider: ProviderPreset, 
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
       model: openingModel,
-      systemPrompt: DEFAULT_PROMPTS.openingGeneration,
+      systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
