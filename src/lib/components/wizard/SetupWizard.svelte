@@ -534,6 +534,7 @@ import { QUICK_START_SEEDS } from "$lib/services/templates";
     const locationDesc = scenario.initialState.startingLocation?.description;
     if (locationDesc) {
       settingSeed = locationDesc;
+      useSettingAsIs();
     }
 
     // Pre-fill protagonist data
@@ -541,13 +542,12 @@ import { QUICK_START_SEEDS } from "$lib/services/templates";
     if (proto) {
       manualCharacterName = proto.name ?? '';
       manualCharacterDescription = proto.description ?? '';
+      manualCharacterBackground = proto.background ?? '';
+      manualCharacterMotivation = proto.motivation ?? '';
       manualCharacterTraits = proto.traits?.join(', ') ?? '';
       showManualInput = true;
+      useManualCharacter();
     }
-
-    // Clear any expanded setting since we have new seed
-    expandedSetting = null;
-    clearSettingEditState();
   }
 
   // Handle infinite carousel scroll - jump to middle when reaching edges
