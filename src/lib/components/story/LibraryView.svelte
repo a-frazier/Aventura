@@ -3,7 +3,7 @@
   import { ui } from '$lib/stores/ui.svelte';
   import { exportService } from '$lib/services/export';
   import { ask } from '@tauri-apps/plugin-dialog';
-  import { BookOpen, Trash2, Clock, Sparkles, Upload, RefreshCw, Archive } from 'lucide-svelte';
+  import { BookOpen, Trash2, Clock, Sparkles, Upload, RefreshCw, Archive, Plus } from 'lucide-svelte';
   import SetupWizard from '../wizard/SetupWizard.svelte';
 
   // File input for import (HTML-based for mobile compatibility)
@@ -94,9 +94,9 @@
 </script>
 
 <div class="h-full overflow-y-auto p-4 sm:p-6 relative">
-  <div class="mx-auto max-w-4xl">
+  <div class="mx-auto max-w-4xl min-h-full flex flex-col">
     <!-- Header -->
-    <div class="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="mb-6 sm:mb-8 flex items-center justify-between gap-4 shrink-0">
       <div>
         <h1 class="text-xl sm:text-2xl font-bold text-surface-100">Story Library</h1>
         <p class="text-sm sm:text-base text-surface-400">Your adventures await</p>
@@ -136,9 +136,8 @@
           class="btn btn-primary flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-3 sm:px-4 text-sm"
           onclick={openSetupWizard}
         >
-          <Sparkles class="h-4 w-4 sm:h-5 sm:w-5" />
-          <span class="xs:hidden">New</span>
-          <span class="hidden xs:inline">Create Story</span>
+          <Plus class="h-4 w-4 sm:h-5 sm:w-5" />
+          <span class="hidden xs:inline">New</span>
         </button>
       </div>
     </div>
@@ -152,15 +151,15 @@
 
     <!-- Stories grid -->
     {#if story.allStories.length === 0}
-      <div class="flex flex-col items-center justify-center py-12 sm:py-20 text-center px-4">
-        <BookOpen class="mb-4 h-12 w-12 sm:h-16 sm:w-16 text-surface-600" />
+      <div class="flex flex-col items-center justify-center flex-1 text-center px-4 pb-20">
+        <BookOpen class="mb-2 h-12 w-12 sm:h-16 sm:w-16 text-surface-600" />
         <h2 class="text-lg sm:text-xl font-semibold text-surface-300">No stories yet</h2>
-        <p class="mt-2 text-sm sm:text-base text-surface-500">Create your first adventure to get started</p>
+        <p class="mt-1 text-sm sm:text-base text-surface-500">Create your first adventure to get started</p>
         <button
-          class="btn btn-primary flex items-center justify-center gap-2 min-h-[48px] mt-6"
+          class="btn btn-primary flex items-center justify-center gap-2 min-h-[48px] mt-4"
           onclick={openSetupWizard}
         >
-          <Sparkles class="h-5 w-5" />
+          <Plus class="h-5 w-5" />
           Create Story
         </button>
       </div>
