@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { ui } from '$lib/stores/ui.svelte';
-  import { story } from '$lib/stores/story.svelte';
-  import { syncService } from '$lib/services/sync';
-  import { exportService } from '$lib/services/export';
-  import { getVersion } from '@tauri-apps/api/app';
+  import { ui } from "$lib/stores/ui.svelte";
+  import { story } from "$lib/stores/story.svelte";
+  import { syncService } from "$lib/services/sync";
+  import { exportService } from "$lib/services/export";
+  import { getVersion } from "@tauri-apps/api/app";
   import {
     X,
     QrCode,
@@ -14,14 +14,14 @@
     AlertTriangle,
     RefreshCw,
     Check,
-  } from 'lucide-svelte';
-  import { Html5Qrcode } from 'html5-qrcode';
+  } from "lucide-svelte";
+  import { Html5Qrcode } from "html5-qrcode";
   import type {
     SyncServerInfo,
     SyncStoryPreview,
     SyncConnectionData,
-  } from '$lib/types/sync';
-  import { onDestroy } from 'svelte';
+  } from "$lib/types/sync";
+  import { onDestroy } from "svelte";
 
   // State
   let serverInfo = $state<SyncServerInfo | null>(null);
@@ -51,7 +51,7 @@
 
   // QR Scanner
   let scanner: Html5Qrcode | null = null;
-  let scannerElementId = 'qr-reader';
+  let scannerElementId = "qr-reader";
 
   // Reset state when modal opens
   $effect(() => {
@@ -135,23 +135,28 @@
 
     try {
       // If replacing, delete the existing story first
-      const existingId = await syncService.findStoryIdByTitle(receivedStoryPreview.title);
+      const existingId = await syncService.findStoryIdByTitle(
+        receivedStoryPreview.title,
+      );
       if (existingId) {
         await syncService.createPreSyncBackup(existingId);
         await syncService.deleteStory(existingId);
       }
 
-      const result = await exportService.importFromContent(receivedStoryJson, true);
+      const result = await exportService.importFromContent(
+        receivedStoryJson,
+        true,
+      );
 
       if (result.success) {
         await story.loadAllStories();
         syncSuccess = true;
         syncMessage = `Successfully received "${receivedStoryPreview.title}"`;
       } else {
-        error = result.error ?? 'Import failed';
+        error = result.error ?? "Import failed";
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Import failed';
+      error = e instanceof Error ? e.message : "Import failed";
     } finally {
       loading = false;
       receivedStoryJson = null;
@@ -192,7 +197,7 @@
   }
 
   async function startGenerateMode() {
-    ui.setSyncMode('generate');
+    ui.setSyncMode("generate");
     loading = true;
     error = null;
 
@@ -203,15 +208,15 @@
       // Start polling for pushed stories
       startPolling();
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to start server';
-      ui.setSyncMode('select');
+      error = e instanceof Error ? e.message : "Failed to start server";
+      ui.setSyncMode("select");
     } finally {
       loading = false;
     }
   }
 
   async function startScanMode() {
-    ui.setSyncMode('scan');
+    ui.setSyncMode("scan");
     error = null;
 
     // Wait for DOM to update
@@ -225,7 +230,7 @@
 
       await scanner.start(
         {
-          facingMode: 'environment',
+          facingMode: "environment",
         },
         {
           fps: 10,
@@ -237,27 +242,36 @@
         },
         () => {
           // Ignore scan failures during continuous scanning
-        }
+        },
       );
 
       // Apply zoom after camera starts (more reliable on mobile)
       try {
-        const videoElement = document.querySelector(`#${scannerElementId} video`) as HTMLVideoElement;
+        const videoElement = document.querySelector(
+          `#${scannerElementId} video`,
+        ) as HTMLVideoElement;
         if (videoElement && videoElement.srcObject) {
-          const track = (videoElement.srcObject as MediaStream).getVideoTracks()[0];
-          const capabilities = track.getCapabilities() as MediaTrackCapabilities & { zoom?: { min: number; max: number } };
+          const track = (
+            videoElement.srcObject as MediaStream
+          ).getVideoTracks()[0];
+          const capabilities =
+            track.getCapabilities() as MediaTrackCapabilities & {
+              zoom?: { min: number; max: number };
+            };
           if (capabilities.zoom) {
             const maxZoom = capabilities.zoom.max;
             const targetZoom = Math.min(maxZoom, 2.5);
-            await track.applyConstraints({ advanced: [{ zoom: targetZoom } as MediaTrackConstraintSet] });
+            await track.applyConstraints({
+              advanced: [{ zoom: targetZoom } as MediaTrackConstraintSet],
+            });
           }
         }
       } catch {
         // Zoom not supported on this device, continue without it
       }
     } catch (e) {
-      error = 'Camera access denied or not available';
-      ui.setSyncMode('select');
+      error = "Camera access denied or not available";
+      ui.setSyncMode("select");
     }
   }
 
@@ -287,8 +301,8 @@
       // No mismatch, proceed normally
       await proceedWithConnection(parsed);
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Connection failed';
-      ui.setSyncMode('select');
+      error = e instanceof Error ? e.message : "Connection failed";
+      ui.setSyncMode("select");
     }
   }
 
@@ -297,7 +311,7 @@
     pendingConnection = null;
     remoteVersion = null;
     localVersion = null;
-    ui.setSyncMode('select');
+    ui.setSyncMode("select");
   }
 
   async function proceedWithVersionMismatch() {
@@ -312,7 +326,7 @@
   async function proceedWithConnection(conn: SyncConnectionData) {
     try {
       connection = conn;
-      ui.setSyncMode('connected');
+      ui.setSyncMode("connected");
 
       // Fetch available stories from remote
       loading = true;
@@ -328,8 +342,8 @@
         entryCount: 0, // We don't track this in the store
       }));
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Connection failed';
-      ui.setSyncMode('select');
+      error = e instanceof Error ? e.message : "Connection failed";
+      ui.setSyncMode("select");
     } finally {
       loading = false;
     }
@@ -339,21 +353,25 @@
     if (!connection || !selectedRemoteStory) return;
 
     // Check for conflict
-    const exists = await syncService.checkStoryExists(selectedRemoteStory.title);
+    const exists = await syncService.checkStoryExists(
+      selectedRemoteStory.title,
+    );
     if (exists && !showConflictWarning) {
       conflictStoryTitle = selectedRemoteStory.title;
       showConflictWarning = true;
       return;
     }
 
-    ui.setSyncMode('syncing');
+    ui.setSyncMode("syncing");
     loading = true;
     error = null;
     showConflictWarning = false;
 
     try {
       // If replacing, delete the existing story first
-      const existingId = await syncService.findStoryIdByTitle(selectedRemoteStory.title);
+      const existingId = await syncService.findStoryIdByTitle(
+        selectedRemoteStory.title,
+      );
       if (existingId) {
         await syncService.createPreSyncBackup(existingId);
         await syncService.deleteStory(existingId);
@@ -362,7 +380,7 @@
       // Pull the story
       const storyJson = await syncService.pullStory(
         connection,
-        selectedRemoteStory.id
+        selectedRemoteStory.id,
       );
 
       // Import using existing import service
@@ -374,10 +392,10 @@
         syncSuccess = true;
         syncMessage = `Successfully pulled "${selectedRemoteStory.title}"`;
       } else {
-        error = result.error ?? 'Import failed';
+        error = result.error ?? "Import failed";
       }
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Pull failed';
+      error = e instanceof Error ? e.message : "Pull failed";
     } finally {
       loading = false;
     }
@@ -386,7 +404,7 @@
   async function pushStory() {
     if (!connection || !selectedLocalStory) return;
 
-    ui.setSyncMode('syncing');
+    ui.setSyncMode("syncing");
     loading = true;
     error = null;
 
@@ -395,7 +413,9 @@
       await syncService.createPreSyncBackup(selectedLocalStory.id);
 
       // Export the story
-      const storyJson = await syncService.exportStoryToJson(selectedLocalStory.id);
+      const storyJson = await syncService.exportStoryToJson(
+        selectedLocalStory.id,
+      );
 
       // Push to remote
       await syncService.pushStory(connection, storyJson);
@@ -403,7 +423,7 @@
       syncSuccess = true;
       syncMessage = `Successfully pushed "${selectedLocalStory.title}"`;
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Push failed';
+      error = e instanceof Error ? e.message : "Push failed";
     } finally {
       loading = false;
     }
@@ -420,10 +440,10 @@
   }
 
   function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    return new Date(timestamp).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   }
 </script>
@@ -444,15 +464,15 @@
         <div class="flex items-center gap-2">
           <RefreshCw class="h-5 w-5 text-accent-400" />
           <h2 class="text-lg font-semibold text-surface-100">
-            {#if ui.syncMode === 'select'}
+            {#if ui.syncMode === "select"}
               Local Network Sync
-            {:else if ui.syncMode === 'generate'}
+            {:else if ui.syncMode === "generate"}
               Waiting for Connection
-            {:else if ui.syncMode === 'scan'}
+            {:else if ui.syncMode === "scan"}
               Scan QR Code
-            {:else if ui.syncMode === 'connected'}
+            {:else if ui.syncMode === "connected"}
               Select Story to Sync
-            {:else if ui.syncMode === 'syncing'}
+            {:else if ui.syncMode === "syncing"}
               Syncing...
             {/if}
           </h2>
@@ -490,7 +510,7 @@
             <p class="text-surface-400">{syncMessage}</p>
             <button class="btn btn-primary mt-6" onclick={close}>Done</button>
           </div>
-        {:else if ui.syncMode === 'select'}
+        {:else if ui.syncMode === "select"}
           <!-- Mode Selection -->
           <p class="text-surface-400 text-sm mb-4">
             Sync stories between devices on the same network.
@@ -527,7 +547,7 @@
               </div>
             </button>
           </div>
-        {:else if ui.syncMode === 'generate'}
+        {:else if ui.syncMode === "generate"}
           <!-- QR Code Display -->
           {#if showReceivedConflict && receivedStoryPreview}
             <!-- Conflict warning for received push -->
@@ -541,11 +561,15 @@
                 Story Already Exists
               </h3>
               <p class="text-surface-400 mb-4">
-                A story named "{receivedStoryPreview.title}" already exists on this device.
-                Replacing it will create a "Pre-sync backup" checkpoint first. Continue?
+                A story named "{receivedStoryPreview.title}" already exists on
+                this device. Replacing it will create a "Pre-sync backup"
+                checkpoint first. Continue?
               </p>
               <div class="flex justify-center gap-3">
-                <button class="btn btn-secondary" onclick={cancelReceivedImport}>
+                <button
+                  class="btn btn-secondary"
+                  onclick={cancelReceivedImport}
+                >
                   Cancel
                 </button>
                 <button class="btn btn-primary" onclick={importReceivedStory}>
@@ -560,9 +584,7 @@
             </div>
           {:else if serverInfo}
             <div class="text-center">
-              <div
-                class="bg-white p-4 rounded-lg inline-block mx-auto mb-4"
-              >
+              <div class="bg-white p-4 rounded-lg inline-block mx-auto mb-4">
                 <img
                   src="data:image/png;base64,{serverInfo.qrCodeBase64}"
                   alt="QR Code"
@@ -570,14 +592,14 @@
                 />
               </div>
               <p class="text-surface-400 text-sm">
-                Scan this QR code with another device running Aventura
+                Scan this QR code with another device running Aventuras
               </p>
               <p class="text-surface-500 text-xs mt-2">
                 Server: {serverInfo.ip}:{serverInfo.port}
               </p>
             </div>
           {/if}
-        {:else if ui.syncMode === 'scan'}
+        {:else if ui.syncMode === "scan"}
           <!-- Version Mismatch Warning -->
           {#if showVersionWarning}
             <div class="text-center py-4">
@@ -590,20 +612,27 @@
                 Version Mismatch
               </h3>
               <p class="text-surface-400 mb-2">
-                The remote device is running a different version of Aventura.
+                The remote device is running a different version of Aventuras.
               </p>
               <div class="text-sm text-surface-500 mb-4">
                 <p>Local: v{localVersion}</p>
-                <p>Remote: {remoteVersion ? `v${remoteVersion}` : 'unknown'}</p>
+                <p>Remote: {remoteVersion ? `v${remoteVersion}` : "unknown"}</p>
               </div>
               <p class="text-surface-400 text-sm mb-4">
-                Syncing between different versions may cause issues. Continue anyway?
+                Syncing between different versions may cause issues. Continue
+                anyway?
               </p>
               <div class="flex justify-center gap-3">
-                <button class="btn btn-secondary" onclick={cancelVersionMismatch}>
+                <button
+                  class="btn btn-secondary"
+                  onclick={cancelVersionMismatch}
+                >
                   Cancel
                 </button>
-                <button class="btn btn-primary" onclick={proceedWithVersionMismatch}>
+                <button
+                  class="btn btn-primary"
+                  onclick={proceedWithVersionMismatch}
+                >
                   Continue Anyway
                 </button>
               </div>
@@ -621,7 +650,7 @@
               </p>
             </div>
           {/if}
-        {:else if ui.syncMode === 'connected'}
+        {:else if ui.syncMode === "connected"}
           <!-- Story Selection -->
           {#if loading}
             <div class="flex flex-col items-center justify-center py-8">
@@ -631,17 +660,15 @@
           {:else}
             <!-- Conflict Warning -->
             {#if showConflictWarning}
-              <div
-                class="mb-4 rounded-lg bg-amber-500/20 p-4 text-amber-400"
-              >
+              <div class="mb-4 rounded-lg bg-amber-500/20 p-4 text-amber-400">
                 <div class="flex items-center gap-2 mb-2">
                   <AlertTriangle class="h-5 w-5" />
                   <span class="font-semibold">Story Already Exists</span>
                 </div>
                 <p class="text-sm">
                   A story named "{conflictStoryTitle}" already exists on this
-                  device. Pulling will replace it after creating a "Pre-sync backup"
-                  checkpoint.
+                  device. Pulling will replace it after creating a "Pre-sync
+                  backup" checkpoint.
                 </p>
                 <div class="flex gap-2 mt-3">
                   <button
@@ -692,7 +719,7 @@
                       </div>
                       <div class="text-xs text-surface-500 mt-1">
                         {remoteStory.entryCount} entries • Updated {formatDate(
-                          remoteStory.updatedAt
+                          remoteStory.updatedAt,
                         )}
                       </div>
                     </button>
@@ -747,12 +774,12 @@
               </div>
             {/if}
           {/if}
-        {:else if ui.syncMode === 'syncing'}
+        {:else if ui.syncMode === "syncing"}
           <!-- Syncing State -->
           <div class="flex flex-col items-center justify-center py-12">
             <Loader2 class="h-8 w-8 text-accent-400 animate-spin" />
             <p class="mt-4 text-surface-400">
-              {selectedRemoteStory ? 'Pulling' : 'Pushing'} story...
+              {selectedRemoteStory ? "Pulling" : "Pushing"} story...
             </p>
             <p class="text-surface-500 text-sm mt-1">Please wait</p>
           </div>
@@ -760,17 +787,25 @@
       </div>
 
       <!-- Footer -->
-      {#if ui.syncMode === 'connected' && !showConflictWarning && !loading && !syncSuccess}
-        <div class="border-t border-surface-700 px-4 pt-4 pb-modal-safe -mx-4 -mb-4 sm:mx-0 sm:mb-0">
+      {#if ui.syncMode === "connected" && !showConflictWarning && !loading && !syncSuccess}
+        <div
+          class="border-t border-surface-700 px-4 pt-4 pb-modal-safe -mx-4 -mb-4 sm:mx-0 sm:mb-0"
+        >
           <div class="flex justify-end gap-2">
             <button class="btn btn-secondary" onclick={close}>Cancel</button>
             {#if selectedRemoteStory}
-              <button class="btn btn-primary flex items-center gap-2" onclick={pullStory}>
+              <button
+                class="btn btn-primary flex items-center gap-2"
+                onclick={pullStory}
+              >
                 <Download class="h-4 w-4" />
                 Pull Story
               </button>
             {:else if selectedLocalStory}
-              <button class="btn btn-primary flex items-center gap-2" onclick={pushStory}>
+              <button
+                class="btn btn-primary flex items-center gap-2"
+                onclick={pushStory}
+              >
                 <Upload class="h-4 w-4" />
                 Push Story
               </button>

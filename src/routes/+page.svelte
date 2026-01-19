@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { database } from '$lib/services/database';
-  import { settings } from '$lib/stores/settings.svelte';
-  import { grammarService } from '$lib/services/grammar';
-  import { updaterService } from '$lib/services/updater';
-  import AppShell from '$lib/components/layout/AppShell.svelte';
-  import ProviderSetupModal from '$lib/components/settings/ProviderSetupModal.svelte';
+  import { onMount } from "svelte";
+  import { database } from "$lib/services/database";
+  import { settings } from "$lib/stores/settings.svelte";
+  import { grammarService } from "$lib/services/grammar";
+  import { updaterService } from "$lib/services/updater";
+  import AppShell from "$lib/components/layout/AppShell.svelte";
+  import ProviderSetupModal from "$lib/components/settings/ProviderSetupModal.svelte";
 
   let initialized = $state(false);
   let error = $state<string | null>(null);
@@ -31,22 +31,28 @@
 
       // Check for updates on startup if enabled (don't await, run in background)
       if (settings.updateSettings.autoCheck) {
-        const { checkInterval, lastChecked, autoDownload } = settings.updateSettings;
+        const { checkInterval, lastChecked, autoDownload } =
+          settings.updateSettings;
         const now = Date.now();
-        const shouldCheck = checkInterval <= 0
-          ? true
-          : !lastChecked || now - lastChecked >= checkInterval * 60 * 60 * 1000;
+        const shouldCheck =
+          checkInterval <= 0
+            ? true
+            : !lastChecked ||
+              now - lastChecked >= checkInterval * 60 * 60 * 1000;
 
         if (shouldCheck) {
-          updaterService.checkForUpdates()
+          updaterService
+            .checkForUpdates()
             .then(async (updateInfo) => {
               await settings.setLastChecked(Date.now());
               if (updateInfo.available) {
-                console.log(`[Updater] Update available: v${updateInfo.version}`);
+                console.log(
+                  `[Updater] Update available: v${updateInfo.version}`,
+                );
 
                 // Auto-download if enabled
                 if (autoDownload) {
-                  console.log('[Updater] Auto-downloading update...');
+                  console.log("[Updater] Auto-downloading update...");
                   updaterService.downloadAndInstall().catch(console.error);
                 }
               }
@@ -57,8 +63,9 @@
 
       initialized = true;
     } catch (e) {
-      console.error('Initialization error:', e);
-      error = e instanceof Error ? e.message : 'Failed to initialize application';
+      console.error("Initialization error:", e);
+      error =
+        e instanceof Error ? e.message : "Failed to initialize application";
     }
   });
 
@@ -77,7 +84,9 @@
 />
 
 {#if error}
-  <div class="flex h-screen w-screen items-center justify-center bg-surface-900">
+  <div
+    class="flex h-screen w-screen items-center justify-center bg-surface-900"
+  >
     <div class="card max-w-md text-center">
       <h1 class="text-xl font-semibold text-red-400">Initialization Error</h1>
       <p class="mt-2 text-surface-400">{error}</p>
@@ -91,16 +100,22 @@
   </div>
 {:else if showProviderSetup}
   <!-- Show loading background while provider setup is shown -->
-  <div class="flex h-screen w-screen items-center justify-center bg-surface-900">
+  <div
+    class="flex h-screen w-screen items-center justify-center bg-surface-900"
+  >
     <div class="flex flex-col items-center gap-4">
-      <p class="text-surface-400">Welcome to Aventura</p>
+      <p class="text-surface-400">Welcome to Aventuras</p>
     </div>
   </div>
 {:else if !initialized}
-  <div class="flex h-screen w-screen items-center justify-center bg-surface-900">
+  <div
+    class="flex h-screen w-screen items-center justify-center bg-surface-900"
+  >
     <div class="flex flex-col items-center gap-4">
-      <div class="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent"></div>
-      <p class="text-surface-400">Loading Aventura...</p>
+      <div
+        class="h-8 w-8 animate-spin rounded-full border-2 border-accent-500 border-t-transparent"
+      ></div>
+      <p class="text-surface-400">Loading Aventuras...</p>
     </div>
   </div>
 {:else}

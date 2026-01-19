@@ -82,7 +82,7 @@
     }
   }
 
-  async function exportAventura() {
+  async function exportAventuras() {
     if (!story.currentStory) return;
     const [
       entries,
@@ -109,7 +109,7 @@
     ]);
     await handleExport(
       () =>
-        exportService.exportToAventura(
+        exportService.exportToAventuras(
           story.currentStory,
           entries,
           characters,
@@ -122,7 +122,7 @@
           branches,
           chapters,
         ),
-      "Aventura (.avt)",
+      "Aventuras (.avt)",
     );
   }
 
@@ -157,7 +157,7 @@
   <div class="flex items-center min-w-0">
     <div class="flex items-center gap-3 px-2.5 sm:px-1">
       {#if story.currentStory}
-        <img src="/logo.png" alt="Aventura" class="h-7 w-7 flex-shrink-0" />
+        <img src="/logo.png" alt="Aventuras" class="h-7 w-7 flex-shrink-0" />
         <span
           class="font-semibold text-surface-100 text-sm sm:text-base truncate max-w-[160px] sm:max-w-none"
         >
@@ -170,8 +170,8 @@
         {/if}
       {:else}
         <!-- App Branding (Library Mode) -->
-        <img src="/logo.png" alt="Aventura" class="h-7 w-7 flex-shrink-0" />
-        <span class="font-semibold text-surface-100 text-lg">Aventura</span>
+        <img src="/logo.png" alt="Aventuras" class="h-7 w-7 flex-shrink-0" />
+        <span class="font-semibold text-surface-100 text-lg">Aventuras</span>
       {/if}
     </div>
   </div>
@@ -245,11 +245,11 @@
               class="flex w-full items-center gap-2 px-3 py-3 sm:py-2 text-left text-sm text-surface-300 hover:bg-surface-700 min-h-[44px] pointer-events-auto cursor-pointer"
               onclick={(e) => {
                 e.stopPropagation();
-                exportAventura();
+                exportAventuras();
               }}
             >
               <FileJson class="h-4 w-4 text-accent-400" />
-              Aventura (.avt)
+              Aventuras (.avt)
             </button>
             <button
               class="flex w-full items-center gap-2 px-3 py-3 sm:py-2 text-left text-sm text-surface-300 hover:bg-surface-700 min-h-[44px] pointer-events-auto cursor-pointer"

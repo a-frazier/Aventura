@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This file contains guidelines for agentic coding assistants working on the Aventura codebase.
+This file contains guidelines for agentic coding assistants working on the Aventuras codebase.
 
 ## Build/Lint/Test Commands
 

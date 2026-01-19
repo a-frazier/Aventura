@@ -1,20 +1,17 @@
 <script lang="ts">
-  import { settings, type ProviderPreset } from '$lib/stores/settings.svelte';
-  import { Check, ExternalLink } from 'lucide-svelte';
+  import { settings, type ProviderPreset } from "$lib/stores/settings.svelte";
+  import { Check, ExternalLink } from "lucide-svelte";
 
   interface Props {
     isOpen: boolean;
     onComplete: () => void;
   }
 
-  let {
-    isOpen,
-    onComplete,
-  }: Props = $props();
+  let { isOpen, onComplete }: Props = $props();
 
   // Form state
-  let selectedProvider = $state<ProviderPreset>('openrouter');
-  let apiKey = $state('');
+  let selectedProvider = $state<ProviderPreset>("openrouter");
+  let apiKey = $state("");
   let showApiKey = $state(false);
   let isSubmitting = $state(false);
   let error = $state<string | null>(null);
@@ -22,41 +19,43 @@
   // Provider info
   const providers = [
     {
-      id: 'openrouter' as ProviderPreset,
-      name: 'OpenRouter',
-      description: 'Access multiple AI models through a single API.',
-      url: 'https://openrouter.ai',
-      signupUrl: 'https://openrouter.ai/keys',
-      keyPrefix: 'sk-or-',
+      id: "openrouter" as ProviderPreset,
+      name: "OpenRouter",
+      description: "Access multiple AI models through a single API.",
+      url: "https://openrouter.ai",
+      signupUrl: "https://openrouter.ai/keys",
+      keyPrefix: "sk-or-",
       requiresKey: true,
     },
     {
-      id: 'nanogpt' as ProviderPreset,
-      name: 'NanoGPT',
-      description: 'Affordable AI API with access to models like Deepseek and GLM.',
-      url: 'https://nano-gpt.com',
-      signupUrl: 'https://nano-gpt.com/api',
-      keyPrefix: 'sk-nano-',
+      id: "nanogpt" as ProviderPreset,
+      name: "NanoGPT",
+      description:
+        "Affordable AI API with access to models like Deepseek and GLM.",
+      url: "https://nano-gpt.com",
+      signupUrl: "https://nano-gpt.com/api",
+      keyPrefix: "sk-nano-",
       requiresKey: true,
-      note: 'For thinking models, append :thinking to the model name (e.g., deepseek/deepseek-v3.2:thinking)',
+      note: "For thinking models, append :thinking to the model name (e.g., deepseek/deepseek-v3.2:thinking)",
     },
     {
-      id: 'custom' as ProviderPreset,
-      name: 'Custom / Self-Hosted',
-      description: 'Configure your own OpenAI-compatible API endpoint in settings.',
-      url: '',
-      signupUrl: '',
-      keyPrefix: '',
+      id: "custom" as ProviderPreset,
+      name: "Custom / Self-Hosted",
+      description:
+        "Configure your own OpenAI-compatible API endpoint in settings.",
+      url: "",
+      signupUrl: "",
+      keyPrefix: "",
       requiresKey: false,
-      note: 'You can configure your API endpoint and key later in the Settings → API tab.',
+      note: "You can configure your API endpoint and key later in the Settings → API tab.",
     },
   ];
 
   $effect(() => {
     if (isOpen) {
       // Reset state when modal opens
-      selectedProvider = 'openrouter';
-      apiKey = '';
+      selectedProvider = "openrouter";
+      apiKey = "";
       showApiKey = false;
       isSubmitting = false;
       error = null;
@@ -69,7 +68,7 @@
 
   async function handleSubmit() {
     if (requiresApiKey() && !apiKey.trim()) {
-      error = 'Please enter your API key';
+      error = "Please enter your API key";
       return;
     }
 
@@ -80,21 +79,24 @@
       await settings.initializeWithProvider(selectedProvider, apiKey.trim());
       onComplete();
     } catch (e) {
-      console.error('Failed to initialize with provider:', e);
-      error = e instanceof Error ? e.message : 'Failed to initialize. Please try again.';
+      console.error("Failed to initialize with provider:", e);
+      error =
+        e instanceof Error
+          ? e.message
+          : "Failed to initialize. Please try again.";
     } finally {
       isSubmitting = false;
     }
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && apiKey.trim()) {
+    if (e.key === "Enter" && apiKey.trim()) {
       handleSubmit();
     }
   }
 
   function getSelectedProvider() {
-    return providers.find(p => p.id === selectedProvider);
+    return providers.find((p) => p.id === selectedProvider);
   }
 </script>
 
@@ -102,7 +104,7 @@
   <div class="modal-backdrop">
     <div class="modal">
       <div class="modal-header">
-        <h1>Welcome to Aventura</h1>
+        <h1>Welcome to Aventuras</h1>
         <p class="subtitle">Choose your AI provider to get started</p>
       </div>
 
@@ -114,7 +116,7 @@
               type="button"
               class="provider-card"
               class:selected={selectedProvider === provider.id}
-              onclick={() => selectedProvider = provider.id}
+              onclick={() => (selectedProvider = provider.id)}
             >
               <div class="provider-header">
                 <span class="provider-name">{provider.name}</span>
@@ -149,18 +151,20 @@
             <div class="api-key-container">
               <input
                 id="api-key"
-                type={showApiKey ? 'text' : 'password'}
+                type={showApiKey ? "text" : "password"}
                 class="input"
-                placeholder={getSelectedProvider()?.keyPrefix ? `${getSelectedProvider()?.keyPrefix}...` : 'Enter your API key'}
+                placeholder={getSelectedProvider()?.keyPrefix
+                  ? `${getSelectedProvider()?.keyPrefix}...`
+                  : "Enter your API key"}
                 bind:value={apiKey}
                 onkeydown={handleKeyDown}
               />
               <button
                 type="button"
                 class="toggle-key-btn"
-                onclick={() => showApiKey = !showApiKey}
+                onclick={() => (showApiKey = !showApiKey)}
               >
-                {showApiKey ? 'Hide' : 'Show'}
+                {showApiKey ? "Hide" : "Show"}
               </button>
             </div>
           </div>
@@ -213,7 +217,9 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 16px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow:
+      0 16px 64px rgba(0, 0, 0, 0.6),
+      0 0 0 1px rgba(255, 255, 255, 0.05);
   }
 
   .modal-header {
@@ -423,7 +429,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   /* Mobile adjustments */

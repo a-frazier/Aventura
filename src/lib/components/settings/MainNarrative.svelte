@@ -1,24 +1,28 @@
 <script lang="ts">
-  import { settings } from '$lib/stores/settings.svelte';
-  import { Cpu, RefreshCw } from 'lucide-svelte';
-  import ProviderOnlySelector from './ProviderOnlySelector.svelte';
-  import type { ProviderInfo } from '$lib/services/ai/types';
-  import { OpenAIProvider } from '$lib/services/ai/openrouter';
-  import type { ReasoningEffort } from '$lib/types';
+  import { settings } from "$lib/stores/settings.svelte";
+  import { Cpu, RefreshCw } from "lucide-svelte";
+  import ProviderOnlySelector from "./ProviderOnlySelector.svelte";
+  import type { ProviderInfo } from "$lib/services/ai/types";
+  import { OpenAIProvider } from "$lib/services/ai/openrouter";
+  import type { ReasoningEffort } from "$lib/types";
 
   interface Props {
     providerOptions: ProviderInfo[];
-    onOpenManualBodyEditor: (title: string, value: string, onSave: (next: string) => void) => void;
+    onOpenManualBodyEditor: (
+      title: string,
+      value: string,
+      onSave: (next: string) => void,
+    ) => void;
   }
 
   let { providerOptions, onOpenManualBodyEditor }: Props = $props();
 
-  const reasoningLevels: ReasoningEffort[] = ['off', 'low', 'medium', 'high'];
+  const reasoningLevels: ReasoningEffort[] = ["off", "low", "medium", "high"];
   const reasoningLabels: Record<ReasoningEffort, string> = {
-    off: 'Off',
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
+    off: "Off",
+    low: "Low",
+    medium: "Medium",
+    high: "High",
   };
 
   let isLoadingModels = $state(false);
@@ -28,21 +32,23 @@
   let profileModels = $derived.by(() => {
     const profile = settings.getMainNarrativeProfile();
     if (!profile) return [];
-    const models = [...new Set([...profile.fetchedModels, ...profile.customModels])];
-    
+    const models = [
+      ...new Set([...profile.fetchedModels, ...profile.customModels]),
+    ];
+
     const providerPriority: Record<string, number> = {
-      'x-ai': 1,
-      'deepseek': 2,
-      'openai': 3,
-      'anthropic': 4,
-      'google': 5,
-      'meta-llama': 6,
-      'mistralai': 7,
+      "x-ai": 1,
+      deepseek: 2,
+      openai: 3,
+      anthropic: 4,
+      google: 5,
+      "meta-llama": 6,
+      mistralai: 7,
     };
 
     return models.sort((a, b) => {
-      const providerA = a.split('/')[0];
-      const providerB = b.split('/')[0];
+      const providerA = a.split("/")[0];
+      const providerB = b.split("/")[0];
       const priorityA = providerPriority[providerA] ?? 99;
       const priorityB = providerPriority[providerB] ?? 99;
 
@@ -52,7 +58,7 @@
   });
 
   function getReasoningIndex(value?: ReasoningEffort): number {
-    const index = reasoningLevels.indexOf(value ?? 'off');
+    const index = reasoningLevels.indexOf(value ?? "off");
     return index === -1 ? 0 : index;
   }
 
@@ -79,23 +85,31 @@
       const fetchedModels = await provider.listModels();
 
       const filteredModelIds = fetchedModels
-        .filter(m => {
+        .filter((m) => {
           const id = m.id.toLowerCase();
-          if (id.includes('embedding') || id.includes('vision-only') || id.includes('tts') || id.includes('whisper')) {
+          if (
+            id.includes("embedding") ||
+            id.includes("vision-only") ||
+            id.includes("tts") ||
+            id.includes("whisper")
+          ) {
             return false;
           }
           return true;
         })
-        .map(m => m.id);
+        .map((m) => m.id);
 
       await settings.updateProfile(profile.id, {
         fetchedModels: filteredModelIds,
       });
 
-      console.log(`[MainNarrative] Fetched ${filteredModelIds.length} models to profile`);
+      console.log(
+        `[MainNarrative] Fetched ${filteredModelIds.length} models to profile`,
+      );
     } catch (error) {
-      console.error('[MainNarrative] Failed to fetch models:', error);
-      modelError = error instanceof Error ? error.message : 'Failed to load models.';
+      console.error("[MainNarrative] Failed to fetch models:", error);
+      modelError =
+        error instanceof Error ? error.message : "Failed to load models.";
     } finally {
       isLoadingModels = false;
     }
@@ -107,7 +121,7 @@
     <Cpu class="h-5 w-5 text-accent-400" />
     <h3 class="text-sm font-semibold text-surface-100">Main Narrative</h3>
   </div>
-  
+
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <!-- API Endpoint -->
     <div>
@@ -122,7 +136,8 @@
         {#each settings.apiSettings.profiles as profile (profile.id)}
           <option value={profile.id}>
             {profile.name}
-            {#if profile.id === settings.getDefaultProfileIdForProvider()} (Default){/if}
+            {#if profile.id === settings.getDefaultProfileIdForProvider()}
+              (Default){/if}
           </option>
         {/each}
       </select>
@@ -131,21 +146,19 @@
     <!-- Model Select -->
     <div>
       <div class="mb-1.5 flex items-center justify-between">
-        <label class="text-xs font-medium text-surface-400">
-          Model
-        </label>
+        <label class="text-xs font-medium text-surface-400"> Model </label>
         <button
           class="flex items-center gap-1 text-xs text-accent-400 hover:text-accent-300 disabled:opacity-50"
           onclick={fetchModelsToProfile}
           disabled={isLoadingModels}
         >
-          <span class={isLoadingModels ? 'animate-spin' : ''}>
+          <span class={isLoadingModels ? "animate-spin" : ""}>
             <RefreshCw class="h-3 w-3" />
           </span>
           Refresh
         </button>
       </div>
-      
+
       {#if modelError}
         <p class="mb-1 text-xs text-amber-400">{modelError}</p>
       {/if}
@@ -175,7 +188,10 @@
   </div>
 
   <!-- Temperature & Max Tokens Row -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-surface-700" class:opacity-50={settings.advancedRequestSettings.manualMode}>
+  <div
+    class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-surface-700"
+    class:opacity-50={settings.advancedRequestSettings.manualMode}
+  >
     <div>
       <label class="mb-1.5 block text-xs font-medium text-surface-400">
         Temperature: {settings.apiSettings.temperature.toFixed(1)}
@@ -186,7 +202,8 @@
         max="1"
         step="0.1"
         value={settings.apiSettings.temperature}
-        oninput={(e) => settings.setTemperature(parseFloat(e.currentTarget.value))}
+        oninput={(e) =>
+          settings.setTemperature(parseFloat(e.currentTarget.value))}
         disabled={settings.advancedRequestSettings.manualMode}
         class="w-full"
       />
@@ -229,7 +246,10 @@
   </div>
 
   <!-- Thinking & Provider Row -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-surface-700" class:opacity-50={settings.advancedRequestSettings.manualMode}>
+  <div
+    class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-surface-700"
+    class:opacity-50={settings.advancedRequestSettings.manualMode}
+  >
     <div>
       <label class="mb-1.5 block text-xs font-medium text-surface-400">
         Thinking: {reasoningLabels[settings.apiSettings.reasoningEffort]}
@@ -240,7 +260,10 @@
         max="3"
         step="1"
         value={getReasoningIndex(settings.apiSettings.reasoningEffort)}
-        onchange={(e) => settings.setMainReasoningEffort(getReasoningValue(parseInt(e.currentTarget.value)))}
+        onchange={(e) =>
+          settings.setMainReasoningEffort(
+            getReasoningValue(parseInt(e.currentTarget.value)),
+          )}
         disabled={settings.advancedRequestSettings.manualMode}
         class="w-full"
       />
@@ -267,25 +290,34 @@
   {#if settings.advancedRequestSettings.manualMode}
     <div class="mt-4 pt-4 border-t border-surface-700">
       <div class="mb-1 flex items-center justify-between">
-        <label class="text-xs font-medium text-surface-400">Manual Request Body (JSON)</label>
+        <label class="text-xs font-medium text-surface-400"
+          >Manual Request Body (JSON)</label
+        >
         <button
           class="text-xs text-accent-400 hover:text-accent-300"
-          onclick={() => onOpenManualBodyEditor('Main Narrative', settings.apiSettings.manualBody, (next) => {
-            settings.apiSettings.manualBody = next;
-            settings.setMainManualBody(next);
-          })}
+          onclick={() =>
+            onOpenManualBodyEditor(
+              "Main Narrative",
+              settings.apiSettings.manualBody,
+              (next) => {
+                settings.apiSettings.manualBody = next;
+                settings.setMainManualBody(next);
+              },
+            )}
         >
           Pop out
         </button>
       </div>
       <textarea
         bind:value={settings.apiSettings.manualBody}
-        onblur={() => settings.setMainManualBody(settings.apiSettings.manualBody)}
+        onblur={() =>
+          settings.setMainManualBody(settings.apiSettings.manualBody)}
         class="input text-xs min-h-[100px] resize-y font-mono w-full"
         rows="4"
       ></textarea>
       <p class="text-xs text-surface-500 mt-1">
-        Overrides request parameters; messages and tools are managed by Aventura.
+        Overrides request parameters; messages and tools are managed by
+        Aventuras.
       </p>
     </div>
   {/if}

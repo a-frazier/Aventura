@@ -782,7 +782,8 @@
   const SWIPE_TIMEOUT = 400; // Max time in ms for a valid swipe
 
   // Elements that should not trigger swipe gestures
-  const INTERACTIVE_SELECTORS = 'input[type="range"], input[type="text"], input[type="number"], textarea, select, button, a';
+  const INTERACTIVE_SELECTORS =
+    'input[type="range"], input[type="text"], input[type="number"], textarea, select, button, a';
 
   function handleTouchStart(e: TouchEvent) {
     // Check if touch started on an interactive element
@@ -2070,7 +2071,7 @@
           ></textarea>
           <p class="text-xs text-surface-500 mt-2">
             Overrides request parameters; messages and tools are managed by
-            Aventura.
+            Aventuras.
           </p>
         </div>
         <div

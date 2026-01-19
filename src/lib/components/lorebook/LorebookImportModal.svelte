@@ -1,17 +1,24 @@
 <script lang="ts">
-  import { ui } from '$lib/stores/ui.svelte';
-  import { story } from '$lib/stores/story.svelte';
+  import { ui } from "$lib/stores/ui.svelte";
+  import { story } from "$lib/stores/story.svelte";
   import {
     parseLorebook,
     classifyEntriesWithLLM,
     convertToEntries,
     type ImportedEntry,
-    type LorebookImportResult
-  } from '$lib/services/lorebookImporter';
-  import { database } from '$lib/services/database';
-  import { X, Upload, FileJson, Loader2, Check, AlertCircle } from 'lucide-svelte';
-  import { swipe } from '$lib/utils/swipe';
-  import type { Entry } from '$lib/types';
+    type LorebookImportResult,
+  } from "$lib/services/lorebookImporter";
+  import { database } from "$lib/services/database";
+  import {
+    X,
+    Upload,
+    FileJson,
+    Loader2,
+    Check,
+    AlertCircle,
+  } from "lucide-svelte";
+  import { swipe } from "$lib/utils/swipe";
+  import type { Entry } from "$lib/types";
 
   let fileInput: HTMLInputElement;
   let dragOver = $state(false);
@@ -27,10 +34,13 @@
   // Type counts for preview
   const typeCounts = $derived.by(() => {
     if (!parseResult) return {};
-    return parseResult.entries.reduce((acc, e) => {
-      acc[e.type] = (acc[e.type] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    return parseResult.entries.reduce(
+      (acc, e) => {
+        acc[e.type] = (acc[e.type] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
   });
 
   function handleFileSelect(e: Event) {
@@ -65,8 +75,8 @@
 
     // Check file extension (case-insensitive)
     const fileName = file.name.toLowerCase();
-    if (!fileName.endsWith('.json') && !fileName.endsWith('.avt')) {
-      error = 'Please select a JSON or Aventura file (.json or .avt)';
+    if (!fileName.endsWith(".json") && !fileName.endsWith(".avt")) {
+      error = "Please select a JSON or Aventuras file (.json or .avt)";
       return;
     }
 
@@ -75,20 +85,21 @@
       const result = parseLorebook(text);
 
       if (!result.success) {
-        error = result.errors.length > 0
-          ? result.errors.join(', ')
-          : 'Invalid lorebook file format';
+        error =
+          result.errors.length > 0
+            ? result.errors.join(", ")
+            : "Invalid lorebook file format";
         return;
       }
 
       if (result.entries.length === 0) {
-        error = 'No valid entries found in this lorebook file';
+        error = "No valid entries found in this lorebook file";
         return;
       }
 
       parseResult = result;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to read file';
+      error = err instanceof Error ? err.message : "Failed to read file";
     }
   }
 
@@ -105,14 +116,14 @@
         (progress) => {
           classificationProgress = progress;
         },
-        story.currentStory?.mode ?? 'adventure'
+        story.currentStory?.mode ?? "adventure",
       );
       parseResult = {
         ...parseResult,
         entries: classified,
       };
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Classification failed';
+      error = err instanceof Error ? err.message : "Classification failed";
     } finally {
       classifying = false;
     }
@@ -135,13 +146,13 @@
           (progress) => {
             classificationProgress = progress;
           },
-          story.currentStory?.mode ?? 'adventure'
+          story.currentStory?.mode ?? "adventure",
         );
         classifying = false;
       }
 
       // Convert to Entry format
-      const entries = convertToEntries(entriesToImport, 'import');
+      const entries = convertToEntries(entriesToImport, "import");
 
       // Add each entry to the database
       const storyId = story.currentStory.id;
@@ -161,7 +172,7 @@
       // Close modal
       ui.closeLorebookImport();
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Import failed';
+      error = err instanceof Error ? err.message : "Import failed";
     } finally {
       importing = false;
       classifying = false;
@@ -181,7 +192,7 @@
 <div
   class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
   onclick={close}
-  onkeydown={(e) => e.key === 'Escape' && close()}
+  onkeydown={(e) => e.key === "Escape" && close()}
   role="dialog"
   aria-modal="true"
   tabindex="-1"
@@ -199,7 +210,9 @@
     </div>
 
     <!-- Header -->
-    <div class="flex items-center justify-between border-b border-surface-700 pb-4 pt-0 sm:pt-0">
+    <div
+      class="flex items-center justify-between border-b border-surface-700 pb-4 pt-0 sm:pt-0"
+    >
       <div class="flex items-center gap-2">
         <Upload class="h-5 w-5 text-accent-400" />
         <h2 class="text-xl font-semibold text-surface-100">Import Lorebook</h2>
@@ -212,7 +225,9 @@
     <!-- Content -->
     <div class="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
       {#if error}
-        <div class="p-3 rounded-lg bg-red-500/20 border border-red-500/50 flex items-start gap-2">
+        <div
+          class="p-3 rounded-lg bg-red-500/20 border border-red-500/50 flex items-start gap-2"
+        >
           <AlertCircle class="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
           <p class="text-red-300 text-sm">{error}</p>
         </div>
@@ -222,14 +237,16 @@
         <!-- File upload area -->
         <div
           class="border-2 border-dashed rounded-lg p-8 text-center transition-colors
-            {dragOver ? 'border-accent-500 bg-accent-500/10' : 'border-surface-600 hover:border-surface-500'}"
+            {dragOver
+            ? 'border-accent-500 bg-accent-500/10'
+            : 'border-surface-600 hover:border-surface-500'}"
           ondrop={handleDrop}
           ondragover={handleDragOver}
           ondragleave={handleDragLeave}
           role="button"
           tabindex="0"
           onclick={() => fileInput.click()}
-          onkeydown={(e) => e.key === 'Enter' && fileInput.click()}
+          onkeydown={(e) => e.key === "Enter" && fileInput.click()}
         >
           <FileJson class="h-12 w-12 text-surface-500 mx-auto mb-3" />
           <p class="text-surface-300 mb-1">Drop a lorebook file here</p>
@@ -244,7 +261,7 @@
         />
 
         <p class="text-xs text-surface-500">
-          Supports Aventura (.avt, .json) and SillyTavern lorebook formats
+          Supports Aventuras (.avt, .json) and SillyTavern lorebook formats
         </p>
       {:else}
         <!-- Preview -->
@@ -266,10 +283,14 @@
         </div>
 
         <!-- AI Classification toggle -->
-        <label class="flex items-center justify-between p-3 rounded-lg bg-surface-800/50 border border-surface-700 cursor-pointer">
+        <label
+          class="flex items-center justify-between p-3 rounded-lg bg-surface-800/50 border border-surface-700 cursor-pointer"
+        >
           <div>
             <div class="text-surface-200">AI-powered classification</div>
-            <div class="text-xs text-surface-500">Use AI to better categorize entry types</div>
+            <div class="text-xs text-surface-500">
+              Use AI to better categorize entry types
+            </div>
           </div>
           <input
             type="checkbox"
@@ -279,10 +300,14 @@
         </label>
 
         {#if classifying}
-          <div class="p-3 rounded-lg bg-surface-800/50 border border-surface-700">
+          <div
+            class="p-3 rounded-lg bg-surface-800/50 border border-surface-700"
+          >
             <div class="flex items-center gap-2 mb-2">
               <Loader2 class="h-4 w-4 text-accent-400 animate-spin" />
-              <span class="text-sm text-surface-300">Classifying entries...</span>
+              <span class="text-sm text-surface-300"
+                >Classifying entries...</span
+              >
             </div>
             <div class="w-full h-2 bg-surface-700 rounded-full overflow-hidden">
               <div
@@ -296,7 +321,10 @@
         <!-- Change file button -->
         <button
           class="text-sm text-accent-400 hover:text-accent-300"
-          onclick={() => { parseResult = null; error = null; }}
+          onclick={() => {
+            parseResult = null;
+            error = null;
+          }}
         >
           Choose a different file
         </button>
@@ -319,7 +347,7 @@
       >
         {#if importing || classifying}
           <Loader2 class="h-4 w-4 animate-spin" />
-          {classifying ? 'Classifying...' : 'Importing...'}
+          {classifying ? "Classifying..." : "Importing..."}
         {:else}
           Import {previewCount} Entries
         {/if}

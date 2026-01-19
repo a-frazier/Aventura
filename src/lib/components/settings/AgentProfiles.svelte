@@ -503,7 +503,8 @@
               placeholder={'{"temperature": 0.7, "top_p": 0.9}'}
             ></textarea>
             <p class="text-xs text-surface-500 mt-1">
-              Overrides request parameters; messages and tools are managed by Aventura.
+              Overrides request parameters; messages and tools are managed by
+              Aventuras.
             </p>
           </div>
         {/if}
