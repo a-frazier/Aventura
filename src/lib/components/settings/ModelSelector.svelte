@@ -117,16 +117,15 @@
       <div class="profile-select-container">
         <select
           class="input profile-select"
-          value={profileId || ''}
+          value={profileId || settings.getDefaultProfileIdForProvider()}
           onchange={(e) => {
             const value = e.currentTarget.value || null;
             onProfileChange(value);
           }}
         >
-          <option value="">Select a profile...</option>
           {#each settings.apiSettings.profiles as profile}
             <option value={profile.id}>
-              {profile.name}{settings.apiSettings.activeProfileId === profile.id ? ' (Active)' : ''}
+              {profile.name}{settings.apiSettings.defaultProfileId === profile.id ? ' (Default)' : ''}
             </option>
           {/each}
         </select>

@@ -1687,11 +1687,23 @@ class SettingsStore {
         try {
           const loadedPresets = JSON.parse(presetsJson);
           if (Array.isArray(loadedPresets) && loadedPresets.length > 0) {
-            this.generationPresets = loadedPresets;
+            // Populate null profileIds with default profile
+            const defaultProfileId = this.getDefaultProfileIdForProvider();
+            this.generationPresets = loadedPresets.map(preset => ({
+              ...preset,
+              profileId: preset.profileId || defaultProfileId
+            }));
           }
         } catch {
           // Keep defaults
         }
+      } else {
+        // Use defaults and populate null profileIds
+        const defaultProfileId = this.getDefaultProfileIdForProvider();
+        this.generationPresets = this.generationPresets.map(preset => ({
+          ...preset,
+          profileId: preset.profileId || defaultProfileId
+        }));
       }
 
       // Load service preset assignments
