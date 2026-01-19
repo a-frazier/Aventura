@@ -96,12 +96,12 @@
 <div class="h-full overflow-y-auto p-4 sm:p-6 relative">
   <div class="mx-auto max-w-4xl min-h-full flex flex-col">
     <!-- Header -->
-    <div class="mb-6 sm:mb-8 flex items-center justify-between gap-4 shrink-0">
+    <div class="mb-6 sm:mb-8 flex items-start justify-between gap-4 shrink-0">
       <div>
         <h1 class="text-xl sm:text-2xl font-bold text-surface-100">Story Library</h1>
         <p class="text-sm sm:text-base text-surface-400">Your adventures await</p>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
+      <div class="flex items-center gap-2 flex-nowrap">
         <button
           class="btn btn-secondary flex items-center gap-1.5 sm:gap-2 min-h-[44px] px-3 sm:px-4 text-sm"
           onclick={() => ui.openSyncModal()}
