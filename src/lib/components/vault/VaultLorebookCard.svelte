@@ -61,7 +61,7 @@
 </script>
 
 <div
-  class="relative rounded-lg border border-surface-700 bg-surface-800 p-4 {selectable && !isImporting ? 'cursor-pointer hover:ring-2 hover:ring-accent-500 transition-all' : ''}"
+  class="relative rounded-lg border bg-surface-800 p-4 {selectable && !isImporting ? 'cursor-pointer border-surface-700 hover:border-accent-500 transition-all' : 'border-surface-700'}"
   onclick={handleCardClick}
   role={selectable && !isImporting ? "button" : undefined}
   tabindex={selectable && !isImporting ? 0 : undefined}

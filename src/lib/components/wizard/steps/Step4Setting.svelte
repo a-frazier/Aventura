@@ -1,7 +1,6 @@
 <script lang="ts">
+  import { slide } from "svelte/transition";
   import {
-    Upload,
-    Archive,
     Loader2,
     Check,
     Sparkles,
@@ -13,8 +12,12 @@
     Skull,
     Heart,
     Building,
+    Archive,
+    ChevronDown,
+    Send,
   } from "lucide-svelte";
-  import VaultScenarioPicker from "$lib/components/vault/VaultScenarioPicker.svelte";
+  import VaultScenarioBrowser from "$lib/components/vault/VaultScenarioBrowser.svelte";
+  import { scenarioVault } from "$lib/stores/scenarioVault.svelte";
   import type { VaultScenario } from "$lib/types";
   import type { ExpandedSetting, GeneratedCharacter } from "../wizardTypes";
   import { QUICK_START_SEEDS } from "$lib/services/templates";
@@ -48,6 +51,7 @@
     cardImportFileInputRef: (el: HTMLInputElement | null) => void;
     scenarioCarouselRef: (el: HTMLDivElement | null) => void;
     onCarouselScroll: () => void;
+    onNavigateToVault?: () => void;
   }
 
   let {
@@ -79,6 +83,7 @@
     cardImportFileInputRef,
     scenarioCarouselRef,
     onCarouselScroll,
+    onNavigateToVault,
   }: Props = $props();
 
   const templateIcons: Record<string, typeof Wand2> = {
@@ -90,26 +95,53 @@
     "historical-drama": Building,
   };
 
-  // Check if setting seed contains {{user}} placeholder
   const hasUserPlaceholder = $derived(settingSeed.includes("{{user}}"));
+  const hasVaultScenarios = $derived(
+    scenarioVault.isLoaded && scenarioVault.scenarios.length > 0,
+  );
+  let showExpandOptions = $state(false);
+  let loadedVaultScenarioId = $state<string | null>(null);
+  let editDescription = $state("");
+  let isEditingDescription = $state(false);
+
+  function handleSelectFromVault(scenario: VaultScenario) {
+    loadedVaultScenarioId = scenario.id;
+    onSelectFromVault(scenario);
+  }
+
+  function handleEditDescription() {
+    editDescription = expandedSetting?.description ?? "";
+    isEditingDescription = true;
+  }
+
+  function handleSaveDescription() {
+    if (editDescription.trim()) {
+      onSettingSeedChange(editDescription);
+      onUseAsIs();
+    }
+    isEditingDescription = false;
+  }
+
+  function handleCancelDescriptionEdit() {
+    editDescription = "";
+    isEditingDescription = false;
+  }
 </script>
 
-<div class="space-y-4 overflow-x-hidden">
-  <!-- Vault Picker Modal -->
-  {#if showScenarioVaultPicker}
-    <VaultScenarioPicker
-      onSelect={onSelectFromVault}
-      onClose={() => onShowVaultPickerChange(false)}
-    />
-  {/if}
-
-  <!-- Starter Scenarios -->
-  <div>
-    <p class="text-xs text-surface-500 mb-2">
-      Tap a starter scenario or write your own below
+<div class="space-y-4">
+  <!-- SECTION 1: Quick Start Templates & Custom -->
+  <div class="space-y-2">
+    <!-- <div class="flex items-center gap-2">
+      <Sparkles class="h-4 w-4 text-accent-400" />
+      <h3 class="text-sm font-medium text-surface-200">
+        Quick Start Templates & Custom
+      </h3>
+    </div> -->
+    <p class="text-surface-400 text-xs">
+      Choose a template or write your own below.
     </p>
 
-    <!-- Desktop Grid (3 columns) -->
+    <!-- Templates Grid -->
     <div class="hidden sm:grid sm:gap-2 sm:grid-cols-3">
       {#each QUICK_START_SEEDS as seed (seed.id)}
         {@const Icon = templateIcons[seed.id] ?? Sparkles}
@@ -128,23 +160,19 @@
       {/each}
     </div>
 
-    <!-- Mobile Carousel (infinite scroll, centered on first item) -->
+    <!-- Mobile Carousel -->
     <div class="sm:hidden relative">
-      <!-- Fade edges -->
       <div
         class="pointer-events-none absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-surface-800 to-transparent z-10"
       ></div>
       <div
         class="pointer-events-none absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-surface-800 to-transparent z-10"
       ></div>
-
-      <!-- Scrollable container with tripled items for infinite effect -->
       <div
         use:scenarioCarouselRef
         onscroll={onCarouselScroll}
         class="flex gap-2 overflow-x-auto py-1 scrollbar-hide"
       >
-        <!-- First copy (for seamless loop) -->
         {#each QUICK_START_SEEDS as seed (seed.id + "-pre")}
           {@const Icon = templateIcons[seed.id] ?? Sparkles}
           <button
@@ -155,13 +183,11 @@
               : ''}"
           >
             <Icon class="h-4 w-4 text-accent-400 shrink-0" />
-            <span
-              class="font-medium text-surface-100 text-sm whitespace-nowrap"
+            <span class="font-medium text-surface-100 text-sm whitespace-nowrap"
               >{seed.name}</span
             >
           </button>
         {/each}
-        <!-- Original items (middle set) -->
         {#each QUICK_START_SEEDS as seed (seed.id)}
           {@const Icon = templateIcons[seed.id] ?? Sparkles}
           <button
@@ -172,13 +198,11 @@
               : ''}"
           >
             <Icon class="h-4 w-4 text-accent-400 shrink-0" />
-            <span
-              class="font-medium text-surface-100 text-sm whitespace-nowrap"
+            <span class="font-medium text-surface-100 text-sm whitespace-nowrap"
               >{seed.name}</span
             >
           </button>
         {/each}
-        <!-- Last copy (for seamless loop) -->
         {#each QUICK_START_SEEDS as seed (seed.id + "-post")}
           {@const Icon = templateIcons[seed.id] ?? Sparkles}
           <button
@@ -189,116 +213,135 @@
               : ''}"
           >
             <Icon class="h-4 w-4 text-accent-400 shrink-0" />
-            <span
-              class="font-medium text-surface-100 text-sm whitespace-nowrap"
+            <span class="font-medium text-surface-100 text-sm whitespace-nowrap"
               >{seed.name}</span
             >
           </button>
         {/each}
       </div>
     </div>
-  </div>
 
-  <p class="text-surface-400">
-    Describe your world in a few sentences. The AI will expand it into a
-    rich setting.
-  </p>
+    <!-- Custom Setting Input -->
+    <div class="space-y-2">
+      <textarea
+        value={settingSeed}
+        oninput={(e) => onSettingSeedChange(e.currentTarget.value)}
+        placeholder="Describe your world... (e.g., A kingdom where music is magic)"
+        class="input min-h-[80px] resize-none"
+        rows="3"
+      ></textarea>
 
-  <!-- Import Options Row -->
-  <div class="flex gap-2 sm:grid sm:grid-cols-3 sm:gap-3">
-    <!-- Import Character Card -->
-    <button
-      class="flex-1 sm:flex-none card bg-surface-900 border-dashed border-2 border-surface-600 p-2 sm:p-4 text-center hover:border-accent-500/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[70px] sm:min-h-[100px]"
-      onclick={() => {
-        const input = document.querySelector('input[type="file"][data-card-input]') as HTMLInputElement;
-        input?.click();
-      }}
-    >
-      <input
-        type="file"
-        accept=".json,.png"
-        class="hidden"
-        data-card-input
-        use:cardImportFileInputRef
-        onchange={onCardImport}
-      />
-      {#if isImportingCard}
-        <Loader2
-          class="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 text-surface-500 animate-spin"
-        />
-        <p class="text-surface-300 text-xs sm:text-sm font-medium">
-          Converting...
-        </p>
-      {:else}
-        <Upload
-          class="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 text-surface-500"
-        />
-        <p class="text-surface-300 text-xs sm:text-sm font-medium">
-          Import Card
-        </p>
-        <p
-          class="text-[10px] sm:text-xs text-surface-500 hidden sm:block"
-        >
-          JSON or PNG
+      {#if hasUserPlaceholder}
+        <p class="text-xs text-surface-500 flex items-center gap-1">
+          <span
+            class="px-1 py-0.5 rounded bg-primary-600/30 text-primary-300 text-[10px] font-mono border border-primary-500/40"
+            >{"{{user}}"}</span
+          >
+          = your character's name
         </p>
       {/if}
-    </button>
 
-    <!-- Load from Vault -->
-    <button
-      class="flex-1 sm:flex-none card bg-surface-900 border-dashed border-2 border-surface-600 p-2 sm:p-4 text-center hover:border-accent-500/50 transition-colors cursor-pointer flex flex-col items-center justify-center min-h-[70px] sm:min-h-[100px]"
-      onclick={() => onShowVaultPickerChange(true)}
-    >
-      <Archive
-        class="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 text-surface-500"
-      />
-      <p class="text-surface-300 text-xs sm:text-sm font-medium">
-        Load Vault
-      </p>
-      <p
-        class="text-[10px] sm:text-xs text-surface-500 hidden sm:block"
-      >
-        Saved scenarios
-      </p>
-    </button>
-
-    <!-- Save to Vault (always visible, disabled when no content) -->
-    <button
-      class="flex-1 sm:flex-none card bg-surface-900 border-dashed border-2 border-surface-600 p-2 sm:p-4 text-center transition-colors flex flex-col items-center justify-center min-h-[70px] sm:min-h-[100px] {savedScenarioToVaultConfirm
-        ? 'border-green-500/50 bg-green-500/10'
-        : ''} {settingSeed.trim()
-        ? 'hover:border-green-500/50 cursor-pointer'
-        : 'opacity-50 cursor-not-allowed'}"
-      onclick={onSaveToVault}
-      disabled={!settingSeed.trim() || savedScenarioToVaultConfirm}
-    >
-      {#if savedScenarioToVaultConfirm}
-        <Check
-          class="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 text-green-400"
-        />
-        <p class="text-green-300 text-xs sm:text-sm font-medium">
-          Saved!
-        </p>
-      {:else}
-        <Archive
-          class="h-5 w-5 sm:h-6 sm:w-6 mb-1 sm:mb-2 text-surface-500"
-        />
-        <p class="text-surface-300 text-xs sm:text-sm font-medium">
-          Save Vault
-        </p>
-        <p
-          class="text-[10px] sm:text-xs text-surface-500 hidden sm:block"
+      <!-- Action Row: Expand dropdown toggle + Use button -->
+      <div class="flex items-center gap-2">
+        <!-- Expand Options Toggle -->
+        <button
+          class="h-9 flex-1 flex items-center justify-between px-3 rounded-lg border border-surface-600 bg-surface-800 text-sm text-surface-300 hover:border-surface-500 transition-colors"
+          onclick={() => (showExpandOptions = !showExpandOptions)}
         >
-          For later use
-        </p>
+          <span class="flex items-center gap-2">
+            <Sparkles class="h-4 w-4 text-accent-400" />
+            <span>Adjust with AI</span>
+          </span>
+          <ChevronDown
+            class="h-4 w-4 text-surface-500 transition-transform {showExpandOptions
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+
+        <!-- Use/Send Button -->
+        <button
+          class="h-9 flex items-center justify-center gap-2 px-4 min-w-[36px] rounded-lg bg-accent-600 text-surface-100 hover:bg-accent-500 disabled:bg-surface-700 disabled:text-surface-500 disabled:cursor-not-allowed transition-colors"
+          onclick={onUseAsIs}
+          disabled={!settingSeed.trim()}
+          title="Use this setting"
+        >
+          <Send class="h-4 w-4 shrink-0" />
+          <span class="hidden sm:inline">Use</span>
+        </button>
+      </div>
+
+      <!-- Expand Options Dropdown -->
+      {#if showExpandOptions}
+        <div
+          class="card bg-surface-900 p-3"
+          transition:slide={{ duration: 150 }}
+        >
+          <div>
+            <label class="mb-1 block text-xs font-medium text-surface-400">
+              Describe what you want to adjust (optional)
+            </label>
+            <textarea
+              value={settingElaborationGuidance}
+              oninput={(e) => onGuidanceChange(e.currentTarget.value)}
+              placeholder="e.g., Focus on dark gothic atmosphere, add steampunk elements..."
+              class="input min-h-[60px] resize-none text-sm"
+              rows="2"
+            ></textarea>
+          </div>
+          <button
+            class="btn btn-secondary w-full flex items-center justify-center gap-2"
+            onclick={onExpandSetting}
+            disabled={isExpandingSetting || !settingSeed.trim()}
+          >
+            {#if isExpandingSetting}
+              <Loader2 class="h-4 w-4 animate-spin" />
+              <span>Expanding...</span>
+            {:else}
+              <Sparkles class="h-4 w-4" />
+              <span>Expand with AI</span>
+            {/if}
+          </button>
+        </div>
       {/if}
-    </button>
+    </div>
+
+    <!-- Error Message -->
+    {#if settingError}
+      <p class="text-sm text-red-400">{settingError}</p>
+    {/if}
   </div>
 
-  <!-- Import Status / Error -->
+  <!-- DIVIDER: Load from Vault -->
+  <div class="flex items-center justify-center gap-3">
+    <div class="h-px flex-1 bg-surface-700"></div>
+    <span class="text-xs text-surface-500 flex items-center gap-1">
+      <Archive class="h-3 w-3" />
+      Or load from vault
+    </span>
+    <div class="h-px flex-1 bg-surface-700"></div>
+  </div>
+
+  <!-- SECTION 2: Load from Vault -->
+  <div class="space-y-1 max-h-[15rem] overflow-y-auto">
+    {#if hasVaultScenarios}
+      <p class="text-surface-400 text-xs">
+        Select a previously saved scenario.
+      </p>
+    {/if}
+    <div>
+      <VaultScenarioBrowser
+        onSelect={handleSelectFromVault}
+        selectedScenarioId={loadedVaultScenarioId}
+        {onNavigateToVault}
+      />
+    </div>
+  </div>
+
+  <!-- Card Import Status -->
   {#if importedCardNpcs.length > 0}
     <div
-      class="flex items-center justify-between bg-surface-800/50 p-2 rounded text-xs"
+      class="flex items-center justify-between bg-green-500/10 border border-green-500/30 p-2 rounded text-xs"
     >
       <span class="text-green-400 flex items-center gap-1">
         <Check class="h-3 w-3" />
@@ -308,163 +351,135 @@
         class="text-surface-400 hover:text-surface-200"
         onclick={onClearCardImport}
       >
-        Clear
+        <X class="h-3 w-3" />
       </button>
     </div>
   {/if}
   {#if cardImportError}
-    <p class="text-xs text-red-400 text-center">{cardImportError}</p>
+    <p class="text-xs text-red-400">{cardImportError}</p>
   {/if}
 
-  <div>
-    <label class="mb-2 block text-sm font-medium text-surface-300">
-      Setting Seed
-    </label>
-    <textarea
-      value={settingSeed}
-      oninput={(e) => onSettingSeedChange(e.currentTarget.value)}
-      placeholder="e.g., A kingdom where music is magic, and bards are the most powerful beings. An ancient evil stirs in the Silent Lands, where no song has been heard for a thousand years..."
-      class="input min-h-[100px] resize-none"
-      rows="4"
-    ></textarea>
-    {#if hasUserPlaceholder}
-      <p class="text-xs text-surface-500 mt-1 flex items-center gap-1">
-        <span
-          class="inline-flex items-center px-1 py-0.5 rounded bg-primary-600/30 text-primary-300 text-[10px] font-mono border border-primary-500/40"
-          >{"{{user}}"}</span
-        >
-        will be replaced with your character's name from Step 5
-      </p>
-    {/if}
-  </div>
-
-  <!-- Elaboration Guidance (visible before expansion) -->
-  {#if !expandedSetting}
-    <div>
-      <label class="mb-1 block text-xs font-medium text-surface-400">
-        Elaboration guidance (optional)
-      </label>
-      <textarea
-        value={settingElaborationGuidance}
-        oninput={(e) => onGuidanceChange(e.currentTarget.value)}
-        placeholder="e.g., Focus on dark gothic atmosphere, add steampunk elements, make the magic system more complex..."
-        class="input min-h-[60px] resize-none text-sm"
-        rows="2"
-      ></textarea>
+  <!-- DIVIDER: Selected Setting (only shows when selected) -->
+  {#if expandedSetting}
+    <div class="flex items-center justify-center gap-3">
+      <div class="h-px flex-1 bg-surface-700"></div>
+      <span class="text-xs text-surface-500 flex items-center gap-1">
+        <Check class="h-3 w-3" />
+        Selected Scenario
+      </span>
+      <div class="h-px flex-1 bg-surface-700"></div>
     </div>
   {/if}
 
-  {#if !expandedSetting}
-    <div class="flex flex-wrap gap-2">
-      <button
-        class="btn btn-secondary flex items-center gap-2"
-        onclick={onUseAsIs}
-        disabled={!settingSeed.trim()}
-      >
-        <Check class="h-4 w-4" />
-        Use As-Is
-      </button>
-      <button
-        class="btn btn-primary flex items-center gap-2"
-        onclick={onExpandSetting}
-        disabled={isExpandingSetting || !settingSeed.trim()}
-      >
-        {#if isExpandingSetting}
-          <Loader2 class="h-4 w-4 animate-spin" />
-          Expanding...
-        {:else}
-          <Sparkles class="h-4 w-4" />
-          Expand with AI
-        {/if}
-      </button>
-      {#if isEditingSetting}
-        <button
-          class="btn btn-secondary flex items-center gap-2"
-          onclick={onCancelEdit}
-          title="Restore the previous expanded setting"
-        >
-          <X class="h-4 w-4" />
-          Cancel Edit
-        </button>
-      {/if}
-    </div>
-  {/if}
-
-  {#if settingError}
-    <p class="text-sm text-red-400">{settingError}</p>
-  {/if}
-
+  <!-- SECTION 3: Selected Setting (only shows when selected) -->
   {#if expandedSetting}
     <div
-      class="card bg-surface-900 px-4 py-3 sm:pt-3 sm:pb-3 space-y-2 sm:space-y-1"
+      class="card bg-surface-900 p-3 space-y-2"
+      transition:slide={{ duration: 200 }}
     >
-      <div class="flex gap-3 sm:mb-2">
-        <p class="text-sm">Selected Setting</p>
+      <!-- Header with actions -->
+      <div class="flex items-center gap-5">
+        <span class="text-sm font-medium text-surface-100"
+          >Selected Setting</span
+        >
         <div class="flex-1"></div>
         <button
-          class="flex items-center gap-1.5 text-xs font-medium text-surface-400 hover:text-surface-100 transition-colors"
-          onclick={onEditSetting}
-          title="Edit the expanded description"
+          class="flex items-center gap-1.5 rounded hover:bg-surface-700 transition-colors text-xs font-medium {savedScenarioToVaultConfirm
+            ? 'text-green-400'
+            : 'text-surface-400 hover:text-green-400'}"
+          onclick={onSaveToVault}
+          disabled={!settingSeed.trim() || savedScenarioToVaultConfirm}
+          title={savedScenarioToVaultConfirm ? "Saved!" : "Save to vault"}
         >
-          <PenTool class="h-3 w-3" />
-          <span>Edit</span>
+          {#if savedScenarioToVaultConfirm}
+            <Check class="h-3.5 w-3.5" />
+            <span>Saved</span>
+          {:else}
+            <Archive class="h-3.5 w-3.5" />
+            <span class="hidden sm:inline">Save to Vault</span>
+          {/if}
         </button>
         <button
-          class="flex items-center gap-1.5 text-xs font-medium text-accent-400 hover:text-accent-300 transition-colors"
+          class="flex items-center gap-1.5 rounded hover:bg-surface-700 text-surface-400 hover:text-surface-100 transition-colors text-xs font-medium"
+          onclick={isEditingDescription
+            ? handleSaveDescription
+            : handleEditDescription}
+          title={isEditingDescription ? "Save" : "Edit"}
+        >
+          {#if isEditingDescription}
+            <Check class="h-3.5 w-3.5" />
+            <span class="hidden sm:inline">Save</span>
+          {:else}
+            <PenTool class="h-3.5 w-3.5" />
+            <span class="hidden sm:inline">Edit</span>
+          {/if}
+        </button>
+        {#if isEditingDescription}
+          <button
+            class="flex items-center gap-1.5 rounded hover:bg-surface-700 text-surface-400 hover:text-surface-100 transition-colors text-xs font-medium"
+            onclick={handleCancelDescriptionEdit}
+            title="Cancel"
+          >
+            <X class="h-3.5 w-3.5" />
+            <span class="hidden sm:inline">Cancel</span>
+          </button>
+        {/if}
+        <button
+          class="flex items-center gap-1.5 rounded hover:bg-surface-700 text-accent-400 hover:text-accent-300 transition-colors text-xs font-medium"
           onclick={onExpandFurther}
           disabled={isExpandingSetting}
-          title="Refine using the current setting details"
+          title="Refine with AI"
         >
           <Sparkles
-            class="h-3 w-3 {isExpandingSetting ? 'animate-pulse' : ''}"
+            class="h-3.5 w-3.5 {isExpandingSetting ? 'animate-pulse' : ''}"
           />
-          <span>{isExpandingSetting ? "Refining..." : "Refine"}</span>
+          <span class="hidden sm:inline">Refine</span>
         </button>
       </div>
-      <p class="text-sm text-surface-300 whitespace-pre-wrap">
-        {expandedSetting.description}
-      </p>
 
+      <!-- Description -->
+      {#if isEditingDescription}
+        <textarea
+          value={editDescription}
+          oninput={(e) => (editDescription = e.currentTarget.value)}
+          placeholder="Edit description..."
+          class="input min-h-[100px] resize-y text-sm"
+          rows="4"
+        ></textarea>
+      {:else}
+        <p class="text-sm text-surface-300 whitespace-pre-wrap">
+          {expandedSetting.description}
+        </p>
+      {/if}
+
+      <!-- Locations -->
       {#if expandedSetting.keyLocations.length > 0}
-        <div>
-          <h4
-            class="text-xs font-medium text-surface-400 uppercase mb-1"
-          >
-            Key Locations
-          </h4>
-          <ul class="text-sm text-surface-300 space-y-1">
-            {#each expandedSetting.keyLocations as location}
-              <li>
-                <strong>{location.name}:</strong>
-                {location.description}
-              </li>
-            {/each}
-          </ul>
+        <div class="text-sm text-surface-400">
+          <span class="font-medium">Locations:</span>
+          {expandedSetting.keyLocations.map((l) => l.name).join(", ")}
         </div>
       {/if}
 
-      <div class="flex flex-wrap gap-2">
-        {#each expandedSetting.themes as theme}
-          <span
-            class="px-2 py-0.5 rounded-full bg-surface-700 text-xs text-surface-300"
-            >{theme}</span
-          >
-        {/each}
-      </div>
+      <!-- Themes -->
+      {#if expandedSetting.themes.length > 0}
+        <div class="flex flex-wrap gap-1.5">
+          {#each expandedSetting.themes as theme}
+            <span
+              class="px-2 py-0.5 rounded-full bg-surface-700 text-xs text-surface-300"
+              >{theme}</span
+            >
+          {/each}
+        </div>
+      {/if}
 
-      <!-- Guidance field for iterative refinement -->
-      <div class="pt-2 border-t border-surface-700">
-        <label class="mb-1 block text-xs font-medium text-surface-400">
-          Refinement guidance (optional)
-        </label>
-        <textarea
-          value={settingElaborationGuidance}
-          oninput={(e) => onGuidanceChange(e.currentTarget.value)}
-          placeholder="e.g., Add more detail about the magic system, make the atmosphere darker..."
-          class="input min-h-[50px] resize-none text-sm"
-          rows="2"
-        ></textarea>
-      </div>
+      <!-- Refinement input -->
+      <input
+        type="text"
+        value={settingElaborationGuidance}
+        oninput={(e) => onGuidanceChange(e.currentTarget.value)}
+        placeholder="Refinement notes (optional)..."
+        class="input text-sm py-1.5"
+      />
     </div>
   {/if}
 </div>

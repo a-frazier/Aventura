@@ -1335,6 +1335,12 @@
     onClose();
   }
 
+  function handleNavigateToVaultScenarios() {
+    ui.setActivePanel("vault");
+    ui.setVaultTab("scenarios");
+    onClose();
+  }
+
   function removeLorebook(id: string) {
     importedLorebooks = importedLorebooks.filter((lb) => lb.id !== id);
     if (importedLorebooks.length === 0) {
@@ -1654,6 +1660,7 @@
           cardImportFileInputRef={(el) => (cardImportFileInput = el)}
           scenarioCarouselRef={(el) => (scenarioCarouselRef = el)}
           onCarouselScroll={handleCarouselScroll}
+          onNavigateToVault={handleNavigateToVaultScenarios}
         />
       {:else if currentStep === 5}
         <Step5Characters

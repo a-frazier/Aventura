@@ -102,7 +102,7 @@
       <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {#each filteredLorebooks as lorebook (lorebook.id)}
           <button
-            class="relative text-left rounded-lg border border-surface-700 bg-surface-800 p-3 hover:ring-2 hover:ring-accent-500 transition-all {isAlreadyImported(lorebook.id) ? 'opacity-50' : ''}"
+            class="relative text-left rounded-lg border border-surface-700 bg-surface-800 p-3 transition-all hover:border-accent-500 {isAlreadyImported(lorebook.id) ? 'opacity-50' : ''}"
             onclick={() => handleSelect(lorebook)}
             disabled={isAlreadyImported(lorebook.id)}
           >
