@@ -109,7 +109,7 @@
     ]);
     await handleExport(
       () =>
-        exportService.exportToAventuras(
+        exportService.exportToAventura(
           story.currentStory,
           entries,
           characters,
