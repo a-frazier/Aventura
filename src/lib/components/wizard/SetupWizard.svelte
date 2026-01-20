@@ -1236,9 +1236,9 @@
     let translations: {
       language: string;
       openingScene?: string;
-      protagonist?: { name?: string; description?: string };
+      protagonist?: { name?: string; description?: string; traits?: string[] };
       startingLocation?: { name?: string; description?: string };
-      characters?: { [originalName: string]: { name?: string; description?: string; relationship?: string } };
+      characters?: { [originalName: string]: { name?: string; description?: string; relationship?: string; traits?: string[] } };
     } | undefined;
 
     if (TranslationService.shouldTranslate(translationSettings)) {
@@ -1255,6 +1255,7 @@
         translations.protagonist = {
           name: protagonistTranslated.name,
           description: protagonistTranslated.description,
+          traits: protagonistTranslated.traits,
         };
       }
 
@@ -1278,6 +1279,7 @@
               name: translated.name,
               description: translated.description,
               relationship: translated.relationship,
+              traits: translated.traits,
             };
           }
         }

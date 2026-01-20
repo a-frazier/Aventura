@@ -2622,9 +2622,9 @@ async createStoryFromWizard(data: {
     translations?: {
       language: string;
       openingScene?: string;
-      protagonist?: { name?: string; description?: string };
+      protagonist?: { name?: string; description?: string; traits?: string[] };
       startingLocation?: { name?: string; description?: string };
-      characters?: { [originalName: string]: { name?: string; description?: string; relationship?: string } };
+      characters?: { [originalName: string]: { name?: string; description?: string; relationship?: string; traits?: string[] } };
     };
   }): Promise<Story> {
 log('createStoryFromWizard called', {
@@ -2681,6 +2681,7 @@ settings: {
         branchId: null, // New stories start on main branch
         translatedName: protagonistTranslation?.name ?? null,
         translatedDescription: protagonistTranslation?.description ?? null,
+        translatedTraits: protagonistTranslation?.traits ?? null,
         translationLanguage: protagonistTranslation ? data.translations?.language ?? null : null,
       };
       await database.addCharacter(protagonist);
@@ -2756,6 +2757,7 @@ settings: {
         translatedName: charTranslation?.name ?? null,
         translatedDescription: charTranslation?.description ?? null,
         translatedRelationship: charTranslation?.relationship ?? null,
+        translatedTraits: charTranslation?.traits ?? null,
         translationLanguage: charTranslation ? data.translations?.language ?? null : null,
       };
       await database.addCharacter(character);

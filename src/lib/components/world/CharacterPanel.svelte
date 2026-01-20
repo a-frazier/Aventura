@@ -563,9 +563,9 @@
           <!-- Details Section - Collapsible -->
           {#if showDetails}
             <div class="mt-2 space-y-1.5 text-xs">
-              {#if character.traits.length > 0}
+              {#if character.traits.length > 0 || (character.translatedTraits && character.translatedTraits.length > 0)}
                 <div class="flex flex-wrap gap-1">
-                  {#each character.traits as trait}
+                  {#each character.translatedTraits ?? character.traits as trait}
                     <span
                       class="rounded bg-surface-700/80 px-1.5 py-0.5 text-surface-400"
                       >{trait}</span

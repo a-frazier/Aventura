@@ -148,6 +148,7 @@ export interface Character {
   translatedName?: string | null;
   translatedDescription?: string | null;
   translatedRelationship?: string | null;
+  translatedTraits?: string[] | null;
   translationLanguage?: string | null;
 }
 

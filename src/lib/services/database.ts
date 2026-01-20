@@ -497,8 +497,8 @@ class DatabaseService {
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata, branch_id, translated_name, translated_description, translated_relationship, translation_language)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata, branch_id, translated_name, translated_description, translated_relationship, translated_traits, translation_language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -514,6 +514,7 @@ class DatabaseService {
         character.translatedName || null,
         character.translatedDescription || null,
         character.translatedRelationship || null,
+        character.translatedTraits ? JSON.stringify(character.translatedTraits) : null,
         character.translationLanguage || null,
       ]
     );
@@ -1536,6 +1537,7 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       translatedName: row.translated_name || null,
       translatedDescription: row.translated_description || null,
       translatedRelationship: row.translated_relationship || null,
+      translatedTraits: row.translated_traits ? JSON.parse(row.translated_traits) : null,
       translationLanguage: row.translation_language || null,
     };
   }
