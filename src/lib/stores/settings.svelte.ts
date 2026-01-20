@@ -73,41 +73,20 @@ export interface ClassifierSettings {
 }
 
 export function getDefaultClassifierSettings(): ClassifierSettings {
-  return {
-    presetId: 'analysis',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'x-ai/grok-4-fast',
-    temperature: 0.3,
-    maxTokens: 8192,
-    systemPrompt: '',
-    reasoningEffort: 'medium',
-    providerOnly: [],
-    manualBody: '',
-    chatHistoryTruncation: 0,
-  };
+  return getDefaultClassifierSettingsForProvider('openrouter');
 }
 
 export function getDefaultClassifierSettingsForProvider(provider: ProviderPreset, customModel?: string | null): ClassifierSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  let reasoningEffort: ReasoningEffort = 'medium';
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-    reasoningEffort = 'high';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
+  const preset = getPresetDefaults(provider, 'classification', customModel);
   return {
     presetId: 'classification',
     profileId: provider === 'custom' ? null : profileId,
-    model,
+    model: preset.model,
     temperature: 0.3,
     maxTokens: 8192,
     systemPrompt: '',
-    reasoningEffort,
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
     chatHistoryTruncation: 0,  // No truncation - full chat history for comprehensive visual descriptors
@@ -132,41 +111,21 @@ export interface LorebookClassifierSettings {
 export const DEFAULT_LOREBOOK_CLASSIFIER_PROMPT = `You are a precise classifier for fantasy/RPG lorebook entries. Analyze the name, content, and keywords to determine the most appropriate category. Be decisive - pick the single best category for each entry. Respond only with the JSON array.`;
 
 export function getDefaultLorebookClassifierSettings(): LorebookClassifierSettings {
-  return {
-    presetId: 'reasoning',
-    profileId: null,  // null = use main narrative profile
-    model: 'x-ai/grok-4.1-fast',
-    temperature: 0.1,
-    maxTokens: 8192,
-    systemPrompt: DEFAULT_LOREBOOK_CLASSIFIER_PROMPT,
-    batchSize: 50,
-    maxConcurrent: 5,
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultLorebookClassifierSettingsForProvider('openrouter');
 }
 
 export function getDefaultLorebookClassifierSettingsForProvider(provider: ProviderPreset, customModel?: string | null): LorebookClassifierSettings {
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
+  const preset = getPresetDefaults(provider, 'classification', customModel);
   return {
     presetId: 'classification',
     profileId: null,  // null = use main narrative profile
-    model,
+    model: preset.model,
     temperature: 0.1,
     maxTokens: 8192,
     systemPrompt: DEFAULT_LOREBOOK_CLASSIFIER_PROMPT,
     batchSize: 50,
     maxConcurrent: 5,
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -184,34 +143,18 @@ export interface MemorySettings {
 }
 
 export function getDefaultMemorySettings(): MemorySettings {
-  return {
-    presetId: 'reasoning',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'x-ai/grok-4.1-fast',
-    temperature: 0.3,
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultMemorySettingsForProvider('openrouter');
 }
 
 export function getDefaultMemorySettingsForProvider(provider: ProviderPreset, customModel?: string | null): MemorySettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
+  const preset = getPresetDefaults(provider, 'memory', customModel);
   return {
     presetId: 'memory',
     profileId: provider === 'custom' ? null : profileId,
-    model,
+    model: preset.model,
     temperature: 0.3,
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -231,40 +174,20 @@ export interface SuggestionsSettings {
 }
 
 export function getDefaultSuggestionsSettings(): SuggestionsSettings {
-  return {
-    presetId: 'storytelling',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'deepseek/deepseek-v3.2',
-    temperature: 0.7,
-    maxTokens: 8192,
-    systemPrompt: '',
-    reasoningEffort: 'off',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultSuggestionsSettingsForProvider('openrouter');
 }
 
 export function getDefaultSuggestionsSettingsForProvider(provider: ProviderPreset, customModel?: string | null): SuggestionsSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  let reasoningEffort: ReasoningEffort = 'off';
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-    reasoningEffort = 'high';
-  } else {
-    model = 'deepseek/deepseek-v3.2';
-  }
+  const preset = getPresetDefaults(provider, 'suggestions', customModel);
   return {
     presetId: 'suggestions',
     profileId: provider === 'custom' ? null : profileId,
-    model,
+    model: preset.model,
     temperature: 0.7,
     maxTokens: 8192,
     systemPrompt: '',
-    reasoningEffort,
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -283,38 +206,19 @@ export interface ActionChoicesSettings {
 }
 
 export function getDefaultActionChoicesSettings(): ActionChoicesSettings {
-  return {
-    presetId: 'storytelling',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'deepseek/deepseek-v3.2',
-    temperature: 0.8,
-    maxTokens: 8192,
-    reasoningEffort: 'off',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultActionChoicesSettingsForProvider('openrouter');
 }
 
 export function getDefaultActionChoicesSettingsForProvider(provider: ProviderPreset, customModel?: string | null): ActionChoicesSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  let reasoningEffort: ReasoningEffort = 'off';
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-    reasoningEffort = 'high';
-  } else {
-    model = 'deepseek/deepseek-v3.2';
-  }
+  const preset = getPresetDefaults(provider, 'suggestions', customModel);
   return {
     presetId: 'suggestions',
     profileId: provider === 'custom' ? null : profileId,
-    model,
+    model: preset.model,
     temperature: 0.8,
     maxTokens: 8192,
-    reasoningEffort,
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -336,42 +240,22 @@ export interface StyleReviewerSettings {
 }
 
 export function getDefaultStyleReviewerSettings(): StyleReviewerSettings {
-  return {
-    presetId: 'reasoning',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    enabled: true, // Enabled by default per requirements
-    model: 'x-ai/grok-4.1-fast',
-    temperature: 0.3,
-    maxTokens: 8192,
-    triggerInterval: 5,
-    systemPrompt: '',
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultStyleReviewerSettingsForProvider('openrouter');
 }
 
 export function getDefaultStyleReviewerSettingsForProvider(provider: ProviderPreset, customModel?: string | null): StyleReviewerSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
+  const preset = getPresetDefaults(provider, 'suggestions', customModel);
   return {
     presetId: 'suggestions',
     profileId: provider === 'custom' ? null : profileId,
     enabled: true,
-    model,
+    model: preset.model,
     temperature: 0.3,
     maxTokens: 8192,
     triggerInterval: 5,
     systemPrompt: '',
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -408,39 +292,21 @@ Guidelines:
 Use your tools to review the story and make necessary changes. When finished, call finish_lore_management with a summary.`;
 
 export function getDefaultLoreManagementSettings(): LoreManagementSettings {
-  return {
-    presetId: 'agentic',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'minimax/minimax-m2.1', // Good for agentic tool calling with reasoning
-    temperature: 0.3,
-    maxIterations: 50,
-    systemPrompt: DEFAULT_LORE_MANAGEMENT_PROMPT,
-    reasoningEffort: 'high',
-    providerOnly: ['minimax'],
-    manualBody: '',
-  };
+  return getDefaultLoreManagementSettingsForProvider('openrouter');
 }
 
 export function getDefaultLoreManagementSettingsForProvider(provider: ProviderPreset, customModel?: string | null): LoreManagementSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'zai-org/glm-4.7-original:thinking';
-  } else {
-    model = 'minimax/minimax-m2.1';
-  }
+  const preset = getPresetDefaults(provider, 'agentic', customModel);
   return {
     presetId: 'agentic',
     profileId: provider === 'custom' ? null : profileId,
-    model,
+    model: preset.model,
     temperature: 0.3,
     maxIterations: 50,
     systemPrompt: DEFAULT_LORE_MANAGEMENT_PROMPT,
-    reasoningEffort: 'high',
-    providerOnly: provider === 'custom' || provider === 'nanogpt' ? [] : ['minimax'],
+    reasoningEffort: preset.reasoningEffort,
+    providerOnly: preset.providerOnly,
     manualBody: '',
   };
 }
@@ -458,33 +324,17 @@ export interface InteractiveLorebookSettings {
 }
 
 export function getDefaultInteractiveLorebookSettings(): InteractiveLorebookSettings {
-  return {
-    presetId: 'creative',
-    profileId: null, // Use main narrative profile by default
-    model: 'z-ai/glm-4.7',
-    temperature: 0.7,
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultInteractiveLorebookSettingsForProvider('openrouter');
 }
 
 export function getDefaultInteractiveLorebookSettingsForProvider(provider: ProviderPreset, customModel?: string | null): InteractiveLorebookSettings {
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'zai-org/glm-4.7-original:thinking';
-  } else {
-    model = 'z-ai/glm-4.7';
-  }
+  const preset = getPresetDefaults(provider, 'agentic', customModel);
   return {
     presetId: 'agentic',
     profileId: null,
-    model,
+    model: preset.model,
     temperature: 0.7,
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -522,43 +372,23 @@ Guidelines:
 The context you provide will be injected into the narrator's prompt to help maintain story consistency.`;
 
 export function getDefaultAgenticRetrievalSettings(): AgenticRetrievalSettings {
-  return {
-    presetId: 'agentic',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    enabled: false, // Disabled by default, static retrieval usually sufficient
-    model: 'minimax/minimax-m2.1',
-    temperature: 0.3,
-    maxIterations: 30,
-    systemPrompt: DEFAULT_AGENTIC_RETRIEVAL_PROMPT,
-    agenticThreshold: 30,
-    reasoningEffort: 'high',
-    providerOnly: ['minimax'],
-    manualBody: '',
-  };
+  return getDefaultAgenticRetrievalSettingsForProvider('openrouter');
 }
 
 export function getDefaultAgenticRetrievalSettingsForProvider(provider: ProviderPreset, customModel?: string | null): AgenticRetrievalSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'zai-org/glm-4.7-original:thinking';
-  } else {
-    model = 'minimax/minimax-m2.1';
-  }
+  const preset = getPresetDefaults(provider, 'agentic', customModel);
   return {
     presetId: 'agentic',
     profileId: provider === 'custom' ? null : profileId,
     enabled: false,
-    model,
+    model: preset.model,
     temperature: 0.3,
     maxIterations: 30,
     systemPrompt: DEFAULT_AGENTIC_RETRIEVAL_PROMPT,
     agenticThreshold: 30,
-    reasoningEffort: 'high',
-    providerOnly: provider === 'custom' || provider === 'nanogpt' ? [] : ['minimax'],
+    reasoningEffort: preset.reasoningEffort,
+    providerOnly: preset.providerOnly,
     manualBody: '',
   };
 }
@@ -580,45 +410,23 @@ export interface TimelineFillSettings {
 }
 
 export function getDefaultTimelineFillSettings(): TimelineFillSettings {
-  return {
-    presetId: 'analysis',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    enabled: true, // Default: enabled (this is the default over agentic retrieval)
-    mode: 'static', // Default: static timeline fill (one-time AI call pattern)
-    model: 'x-ai/grok-4.1-fast',
-    temperature: 0.3,
-    maxQueries: 5,
-    systemPrompt: '',
-    queryAnswerPrompt: '',
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultTimelineFillSettingsForProvider('openrouter');
 }
 
 export function getDefaultTimelineFillSettingsForProvider(provider: ProviderPreset, customModel?: string | null): TimelineFillSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
-  const temperature = 0.3;
+  const preset = getPresetDefaults(provider, 'memory', customModel);
   return {
     presetId: 'memory',
     profileId: provider === 'custom' ? null : profileId,
     enabled: true,
     mode: 'static',
-    model,
-    temperature,
+    model: preset.model,
+    temperature: 0.3,
     maxQueries: 5,
     systemPrompt: '',
     queryAnswerPrompt: '',
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -636,34 +444,18 @@ export interface ChapterQuerySettings {
 }
 
 export function getDefaultChapterQuerySettings(): ChapterQuerySettings {
-  return {
-    presetId: 'analysis',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'x-ai/grok-4.1-fast',
-    temperature: 0.2,  // Lower temperature for factual Q&A
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultChapterQuerySettingsForProvider('openrouter');
 }
 
 export function getDefaultChapterQuerySettingsForProvider(provider: ProviderPreset, customModel?: string | null): ChapterQuerySettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
+  const preset = getPresetDefaults(provider, 'memory', customModel);
   return {
     presetId: 'memory',
     profileId: provider === 'custom' ? null : profileId,
-    model,
+    model: preset.model,
     temperature: 0.2,
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -684,41 +476,21 @@ export interface EntryRetrievalSettings {
 }
 
 export function getDefaultEntryRetrievalSettings(): EntryRetrievalSettings {
-  return {
-    presetId: 'reasoning',
-    profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-    model: 'x-ai/grok-4.1-fast',
-    temperature: 0.2,
-    maxTier3Entries: 0,
-    maxWordsPerEntry: 0,
-    enableLLMSelection: true,
-    reasoningEffort: 'high',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultEntryRetrievalSettingsForProvider('openrouter');
 }
 
 export function getDefaultEntryRetrievalSettingsForProvider(provider: ProviderPreset, customModel?: string | null): EntryRetrievalSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-  } else {
-    model = 'x-ai/grok-4.1-fast';
-  }
-  const temperature = provider === 'nanogpt' ? 0.3 : 0.2;
+  const preset = getPresetDefaults(provider, 'classification', customModel);
   return {
     presetId: 'classification',
     profileId: provider === 'custom' ? null : profileId,
-    model,
-    temperature,
+    model: preset.model,
+    temperature: provider === 'nanogpt' ? 0.3 : 0.2,
     maxTier3Entries: 0,
     maxWordsPerEntry: 0,
     enableLLMSelection: true,
-    reasoningEffort: 'high',
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -881,37 +653,18 @@ export interface CharacterCardImportSettings {
 }
 
 export function getDefaultCharacterCardImportSettings(): CharacterCardImportSettings {
-  return {
-    presetId: 'storytelling',
-    profileId: null,  // null = use main narrative profile
-    model: 'deepseek/deepseek-v3.2',
-    temperature: 0.3,
-    maxTokens: 16384,
-    reasoningEffort: 'off',
-    providerOnly: [],
-    manualBody: '',
-  };
+  return getDefaultCharacterCardImportSettingsForProvider('openrouter');
 }
 
 export function getDefaultCharacterCardImportSettingsForProvider(provider: ProviderPreset, customModel?: string | null): CharacterCardImportSettings {
-  // For custom provider, use provided model or fall back to placeholder
-  let model: string;
-  let reasoningEffort: ReasoningEffort = 'off';
-  if (provider === 'custom') {
-    model = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    model = 'xiaomi/mimo-v2-flash-thinking-original';
-    reasoningEffort = 'high';
-  } else {
-    model = 'deepseek/deepseek-v3.2';
-  }
+  const preset = getPresetDefaults(provider, 'classification', customModel);
   return {
     presetId: 'classification',
     profileId: null,
-    model,
+    model: preset.model,
     temperature: 0.3,
     maxTokens: 16384,
-    reasoningEffort,
+    reasoningEffort: preset.reasoningEffort,
     providerOnly: [],
     manualBody: '',
   };
@@ -1356,6 +1109,19 @@ export function getDefaultGenerationPresetsForProvider(provider: ProviderPreset,
       manualBody: ''
     }
   ];
+}
+
+/**
+ * Helper to get a specific preset's config from the provider defaults.
+ * Services should use this to derive their model/reasoning from the preset they're assigned to.
+ */
+export function getPresetDefaults(provider: ProviderPreset, presetId: string, customModel?: string | null): GenerationPreset {
+  const presets = getDefaultGenerationPresetsForProvider(provider, customModel);
+  const preset = presets.find(p => p.id === presetId);
+  if (!preset) {
+    throw new Error(`Unknown preset ID: ${presetId}`);
+  }
+  return preset;
 }
 
 // Settings Store using Svelte 5 runes

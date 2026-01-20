@@ -1,4 +1,4 @@
-import { settings, DEFAULT_OPENROUTER_PROFILE_ID, DEFAULT_NANOGPT_PROFILE_ID, type ProviderPreset } from '$lib/stores/settings.svelte';
+import { settings, DEFAULT_OPENROUTER_PROFILE_ID, DEFAULT_NANOGPT_PROFILE_ID, type ProviderPreset, getPresetDefaults } from '$lib/stores/settings.svelte';
 import type { ReasoningEffort, GenerationPreset } from '$lib/types';
 import { OpenAIProvider, OPENROUTER_API_URL } from './openrouter';
 import { buildExtraBody } from './requestOverrides';
@@ -55,212 +55,107 @@ export interface AdvancedWizardSettings {
 // settings, but the actual prompts are rendered via promptService.
 
 export function getDefaultAdvancedSettings(): AdvancedWizardSettings {
-  return {
-    settingExpansion: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'deepseek/deepseek-v3.2', // deepseek for world elaboration
-      systemPrompt: '',
-      temperature: 0.3,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'off',
-      providerOnly: [],
-      manualBody: '',
-    },
-    settingRefinement: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'deepseek/deepseek-v3.2',
-      systemPrompt: '',
-      temperature: 0.3,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'off',
-      providerOnly: [],
-      manualBody: '',
-    },
-    protagonistGeneration: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'deepseek/deepseek-v3.2', // deepseek for protagonist generation
-      systemPrompt: '',
-      temperature: 0.3,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'off',
-      providerOnly: [],
-      manualBody: '',
-    },
-    characterElaboration: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'deepseek/deepseek-v3.2', // deepseek for character elaboration
-      systemPrompt: '',
-      temperature: 0.3,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'off',
-      providerOnly: [],
-      manualBody: '',
-    },
-    characterRefinement: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'deepseek/deepseek-v3.2',
-      systemPrompt: '',
-      temperature: 0.3,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'off',
-      providerOnly: [],
-      manualBody: '',
-    },
-    supportingCharacters: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: SCENARIO_MODEL, // deepseek for supporting characters
-      systemPrompt: '',
-      temperature: 0.3,
-      maxTokens: 8192,
-      reasoningEffort: 'off',
-      providerOnly: [],
-      manualBody: '',
-    },
-    openingGeneration: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'z-ai/glm-4.7', // GLM-4.7 with z-ai provider for opening generation
-      systemPrompt: '', // Empty = use mode-specific prompts (adventure vs creative-writing)
-      temperature: 0.8,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'high',
-      providerOnly: [],
-      manualBody: '',
-    },
-    openingRefinement: {
-      profileId: DEFAULT_OPENROUTER_PROFILE_ID,
-      model: 'z-ai/glm-4.7',
-      systemPrompt: '',
-      temperature: 0.8,
-      topP: 0.95,
-      maxTokens: 8192,
-      reasoningEffort: 'high',
-      providerOnly: [],
-      manualBody: '',
-    },
-  };
+  return getDefaultAdvancedSettingsForProvider('openrouter');
 }
 
 export function getDefaultAdvancedSettingsForProvider(provider: ProviderPreset, customModel?: string | null): AdvancedWizardSettings {
   const profileId = provider === 'nanogpt' ? DEFAULT_NANOGPT_PROFILE_ID : DEFAULT_OPENROUTER_PROFILE_ID;
-
-  // For custom provider, use provided model or fall back to placeholder
-  let generalModel: string;
-  let openingModel: string;
-  let generalReasoningEffort: ReasoningEffort = 'off';
-
-  if (provider === 'custom') {
-    generalModel = customModel || 'gpt-4o-mini';
-    openingModel = customModel || 'gpt-4o-mini';
-  } else if (provider === 'nanogpt') {
-    // NanoGPT uses zai-org/ prefix and :thinking suffix with high reasoning
-    generalModel = 'zai-org/glm-4.7-original:thinking';
-    openingModel = 'zai-org/glm-4.7-original:thinking';
-    generalReasoningEffort = 'high';
-  } else {
-    generalModel = 'deepseek/deepseek-v3.2';
-    openingModel = 'z-ai/glm-4.7';
-  }
+  const preset = getPresetDefaults(provider, 'wizard', customModel);
 
   return {
     settingExpansion: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     settingRefinement: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     protagonistGeneration: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     characterElaboration: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     characterRefinement: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     supportingCharacters: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     openingGeneration: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: openingModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: 'high',
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
     openingRefinement: {
       presetId: 'wizard',
       profileId: provider === 'custom' ? null : profileId,
-      model: generalModel,
+      model: preset.model,
       systemPrompt: '',
       temperature: 0.3,
       topP: 0.95,
       maxTokens: 8192,
-      reasoningEffort: generalReasoningEffort,
+      reasoningEffort: preset.reasoningEffort,
       providerOnly: [],
       manualBody: '',
     },
