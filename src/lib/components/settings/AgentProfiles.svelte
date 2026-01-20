@@ -195,6 +195,24 @@
       icon: Languages,
       description: "Translates world state elements",
     },
+    {
+      id: "translation:suggestions",
+      label: "Translate Suggestions",
+      icon: Languages,
+      description: "Translates plot suggestions",
+    },
+    {
+      id: "translation:actionChoices",
+      label: "Translate Choices",
+      icon: Languages,
+      description: "Translates action choices",
+    },
+    {
+      id: "translation:wizard",
+      label: "Translate Wizard",
+      icon: Languages,
+      description: "Translates wizard content",
+    },
   ] as const;
 
   // State
@@ -235,6 +253,9 @@
     "translation:narration": "translation",
     "translation:input": "translation",
     "translation:ui": "translation",
+    "translation:suggestions": "translation",
+    "translation:actionChoices": "translation",
+    "translation:wizard": "translation",
   };
 
   function getReasoningIndex(value?: string): number {

@@ -147,6 +147,7 @@ export interface Character {
   // Translation fields
   translatedName?: string | null;
   translatedDescription?: string | null;
+  translatedRelationship?: string | null;
   translationLanguage?: string | null;
 }
 

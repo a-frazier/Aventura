@@ -178,10 +178,26 @@
         story.pov,
         story.tense,
       );
-      ui.setSuggestions(result.suggestions, story.currentStory?.id);
+
+      // Translate suggestions if enabled
+      let finalSuggestions = result.suggestions;
+      const translationSettings = settings.translationSettings;
+      if (TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          finalSuggestions = await aiService.translateSuggestions(
+            result.suggestions,
+            translationSettings.targetLanguage,
+          );
+          log("Suggestions translated");
+        } catch (error) {
+          log("Suggestion translation failed (non-fatal):", error);
+        }
+      }
+
+      ui.setSuggestions(finalSuggestions, story.currentStory?.id);
       log(
         "Suggestions refreshed:",
-        result.suggestions.length,
+        finalSuggestions.length,
         "with",
         activeLorebookEntries.length,
         "active lorebook entries",
@@ -189,7 +205,7 @@
 
       // Emit SuggestionsReady event
       emitSuggestionsReady(
-        result.suggestions.map((s) => ({ text: s.text, type: s.type })),
+        finalSuggestions.map((s) => ({ text: s.text, type: s.type })),
       );
     } catch (error) {
       log("Failed to generate suggestions:", error);
@@ -305,10 +321,26 @@
         story.pov,
         activeLorebookEntries,
       );
-      ui.setActionChoices(result.choices, story.currentStory?.id);
+
+      // Translate action choices if enabled
+      let finalChoices = result.choices;
+      const translationSettings = settings.translationSettings;
+      if (TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          finalChoices = await aiService.translateActionChoices(
+            result.choices,
+            translationSettings.targetLanguage,
+          );
+          log("Action choices translated");
+        } catch (error) {
+          log("Action choices translation failed (non-fatal):", error);
+        }
+      }
+
+      ui.setActionChoices(finalChoices, story.currentStory?.id);
       log(
         "Action choices generated:",
-        result.choices.length,
+        finalChoices.length,
         "with",
         activeLorebookEntries.length,
         "active lorebook entries",

@@ -1317,6 +1317,79 @@ class AIService {
     const translationService = new TranslationService(provider, presetId);
     return await translationService.translateUIElements(items, targetLanguage);
   }
+
+  /**
+   * Translate suggestions (creative writing plot suggestions).
+   */
+  async translateSuggestions<T extends { text: string; type?: string }>(
+    suggestions: T[],
+    targetLanguage: string
+  ): Promise<T[]> {
+    log('translateSuggestions called', {
+      count: suggestions.length,
+      targetLanguage,
+    });
+
+    const presetId = settings.getServicePresetId('translation:suggestions');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateSuggestions(suggestions, targetLanguage);
+  }
+
+  /**
+   * Translate action choices (adventure mode).
+   */
+  async translateActionChoices<T extends { text: string; type?: string }>(
+    choices: T[],
+    targetLanguage: string
+  ): Promise<T[]> {
+    log('translateActionChoices called', {
+      count: choices.length,
+      targetLanguage,
+    });
+
+    const presetId = settings.getServicePresetId('translation:actionChoices');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateActionChoices(choices, targetLanguage);
+  }
+
+  /**
+   * Translate wizard content (settings, characters, openings).
+   */
+  async translateWizardContent(
+    content: string,
+    targetLanguage: string
+  ): Promise<TranslationResult> {
+    log('translateWizardContent called', {
+      contentLength: content.length,
+      targetLanguage,
+    });
+
+    const presetId = settings.getServicePresetId('translation:wizard');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateWizardContent(content, targetLanguage);
+  }
+
+  /**
+   * Batch translate wizard content - all fields in one API call.
+   * Much more efficient than calling translateWizardContent for each field.
+   */
+  async translateWizardBatch(
+    fields: Record<string, string>,
+    targetLanguage: string
+  ): Promise<Record<string, string>> {
+    log('translateWizardBatch called', {
+      fieldCount: Object.keys(fields).length,
+      targetLanguage,
+    });
+
+    const presetId = settings.getServicePresetId('translation:wizard');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateWizardBatch(fields, targetLanguage);
+  }
 }
 
 export const aiService = new AIService();

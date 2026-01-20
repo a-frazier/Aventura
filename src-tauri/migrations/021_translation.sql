@@ -6,6 +6,7 @@ ALTER TABLE story_entries ADD COLUMN original_input TEXT;
 -- Add translation columns to characters
 ALTER TABLE characters ADD COLUMN translated_name TEXT;
 ALTER TABLE characters ADD COLUMN translated_description TEXT;
+ALTER TABLE characters ADD COLUMN translated_relationship TEXT;
 ALTER TABLE characters ADD COLUMN translation_language TEXT;
 
 -- Add translation columns to locations

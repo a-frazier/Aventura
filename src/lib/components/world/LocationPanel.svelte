@@ -140,16 +140,16 @@
         <span class="text-sm font-medium">Current Location</span>
       </div>
       <h4 class="mt-1 break-words font-medium text-surface-100">
-        {story.currentLocation.name}
+        {story.currentLocation.translatedName ?? story.currentLocation.name}
       </h4>
-      {#if story.currentLocation.description}
+      {#if story.currentLocation.description || story.currentLocation.translatedDescription}
         <div
           class="mt-1 space-y-2 rounded-md bg-surface-800/40"
           class:max-h-24={currentIsCollapsed && currentNeedsCollapse}
           class:overflow-hidden={currentIsCollapsed && currentNeedsCollapse}
         >
           <p class="break-words text-sm text-surface-400">
-            {story.currentLocation.description}
+            {story.currentLocation.translatedDescription ?? story.currentLocation.description}
           </p>
         </div>
       {/if}

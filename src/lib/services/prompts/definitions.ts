@@ -802,6 +802,8 @@ export const CONTEXT_PLACEHOLDERS: ContextPlaceholder[] = [
   // Translation service
   { id: 'content', name: 'Content', token: 'content', category: 'service', description: 'Text content to translate' },
   { id: 'elements-json', name: 'Elements JSON', token: 'elementsJson', category: 'service', description: 'JSON array of UI elements to translate (with id, text, type)' },
+  { id: 'suggestions-json', name: 'Suggestions JSON', token: 'suggestionsJson', category: 'service', description: 'JSON array of plot suggestions to translate' },
+  { id: 'choices-json', name: 'Choices JSON', token: 'choicesJson', category: 'service', description: 'JSON array of action choices to translate' },
 ];
 
 /**
@@ -2760,6 +2762,63 @@ Respond with a JSON array in the same format with translated text.`,
   userContent: `{{elementsJson}}`,
 };
 
+const translateSuggestionsTemplate: PromptTemplate = {
+  id: 'translate-suggestions',
+  name: 'Translate Suggestions',
+  category: 'service',
+  description: 'Translates creative writing plot suggestions',
+  content: `You are translating plot suggestions for interactive fiction to {{targetLanguage}}.
+
+Translate the JSON array of suggestions below. For each item:
+- Translate the "text" field (the suggestion content)
+- Keep the "type" field unchanged (action, dialogue, revelation, twist)
+- Preserve character names and proper nouns
+- Maintain the tone and creative intent
+
+Respond with a JSON array in the same format with translated text.`,
+  userContent: `{{suggestionsJson}}`,
+};
+
+const translateActionChoicesTemplate: PromptTemplate = {
+  id: 'translate-action-choices',
+  name: 'Translate Action Choices',
+  category: 'service',
+  description: 'Translates adventure mode action choices',
+  content: `You are translating action choices for an interactive adventure game to {{targetLanguage}}.
+
+Translate the JSON array of action choices below. For each item:
+- Translate the "text" field (the action description)
+- Keep the "type" field unchanged (do, say, think, or custom)
+- Preserve character names and proper nouns
+- Match the tone and style (casual, urgent, dramatic, etc.)
+
+Respond with a JSON array in the same format with translated text.`,
+  userContent: `{{choicesJson}}`,
+};
+
+const translateWizardContentTemplate: PromptTemplate = {
+  id: 'translate-wizard-content',
+  name: 'Translate Wizard Content',
+  category: 'service',
+  description: 'Translates story wizard generated content',
+  content: `You are translating story content for a creative writing wizard to {{targetLanguage}}.
+
+The content may include:
+- Setting descriptions and world-building details
+- Character names, descriptions, backgrounds, and traits
+- Story openings and scene descriptions
+- Location names and descriptions
+
+Rules:
+1. Preserve the original meaning, tone, and creative style
+2. Keep proper nouns and character names in their original form (do not translate names)
+3. Maintain formatting (paragraphs, lists, etc.)
+4. Do not add, remove, or interpret content
+
+Respond with ONLY the translated text, no explanations.`,
+  userContent: `{{content}}`,
+};
+
 // ============================================================================
 // COMBINED PROMPT TEMPLATES
 // ============================================================================
@@ -2792,6 +2851,9 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   translateNarrationTemplate,
   translateInputTemplate,
   translateUITemplate,
+  translateSuggestionsTemplate,
+  translateActionChoicesTemplate,
+  translateWizardContentTemplate,
   // Wizard prompts
   settingExpansionPromptTemplate,
   settingRefinementPromptTemplate,

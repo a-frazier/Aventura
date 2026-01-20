@@ -260,6 +260,295 @@ export class TranslationService {
   }
 
   /**
+   * Module 4: Translate suggestions (creative writing plot suggestions)
+   */
+  async translateSuggestions<T extends { text: string; type?: string }>(
+    suggestions: T[],
+    targetLanguage: string
+  ): Promise<T[]> {
+    if (suggestions.length === 0) return [];
+
+    // Skip if target is English
+    if (targetLanguage === 'en') {
+      return suggestions;
+    }
+
+    log('translateSuggestions called', {
+      count: suggestions.length,
+      targetLanguage,
+    });
+
+    const promptContext: PromptContext = {
+      mode: 'adventure',
+      pov: 'second',
+      tense: 'present',
+      protagonistName: 'the protagonist',
+    };
+
+    const systemPrompt = promptService.renderPrompt('translate-suggestions', promptContext, {
+      targetLanguage: this.getLanguageName(targetLanguage),
+    });
+
+    const userPrompt = promptService.renderUserPrompt('translate-suggestions', promptContext, {
+      suggestionsJson: JSON.stringify(suggestions, null, 2),
+    });
+
+    try {
+      const response = await this.provider.generateResponse({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: this.temperature,
+        maxTokens: this.maxTokens,
+        extraBody: this.extraBody,
+      });
+
+      const parsed = tryParseJsonWithHealing<T[]>(response.content);
+      if (!parsed || !Array.isArray(parsed)) {
+        log('Failed to parse suggestions translation response');
+        return suggestions;
+      }
+
+      log('Suggestions translated', {
+        inputCount: suggestions.length,
+        outputCount: parsed.length,
+      });
+
+      return parsed;
+    } catch (error) {
+      log('Suggestions translation failed:', error);
+      return suggestions;
+    }
+  }
+
+  /**
+   * Module 5: Translate action choices (adventure mode)
+   */
+  async translateActionChoices<T extends { text: string; type?: string }>(
+    choices: T[],
+    targetLanguage: string
+  ): Promise<T[]> {
+    if (choices.length === 0) return [];
+
+    // Skip if target is English
+    if (targetLanguage === 'en') {
+      return choices;
+    }
+
+    log('translateActionChoices called', {
+      count: choices.length,
+      targetLanguage,
+    });
+
+    const promptContext: PromptContext = {
+      mode: 'adventure',
+      pov: 'second',
+      tense: 'present',
+      protagonistName: 'the protagonist',
+    };
+
+    const systemPrompt = promptService.renderPrompt('translate-action-choices', promptContext, {
+      targetLanguage: this.getLanguageName(targetLanguage),
+    });
+
+    const userPrompt = promptService.renderUserPrompt('translate-action-choices', promptContext, {
+      choicesJson: JSON.stringify(choices, null, 2),
+    });
+
+    try {
+      const response = await this.provider.generateResponse({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: this.temperature,
+        maxTokens: this.maxTokens,
+        extraBody: this.extraBody,
+      });
+
+      const parsed = tryParseJsonWithHealing<T[]>(response.content);
+      if (!parsed || !Array.isArray(parsed)) {
+        log('Failed to parse action choices translation response');
+        return choices;
+      }
+
+      log('Action choices translated', {
+        inputCount: choices.length,
+        outputCount: parsed.length,
+      });
+
+      return parsed;
+    } catch (error) {
+      log('Action choices translation failed:', error);
+      return choices;
+    }
+  }
+
+  /**
+   * Module 6: Translate wizard content (settings, characters, openings)
+   */
+  async translateWizardContent(
+    content: string,
+    targetLanguage: string
+  ): Promise<TranslationResult> {
+    // Skip if target is English
+    if (targetLanguage === 'en') {
+      return { translatedContent: content };
+    }
+
+    log('translateWizardContent called', {
+      contentLength: content.length,
+      targetLanguage,
+    });
+
+    const promptContext: PromptContext = {
+      mode: 'adventure',
+      pov: 'second',
+      tense: 'present',
+      protagonistName: 'the protagonist',
+    };
+
+    const systemPrompt = promptService.renderPrompt('translate-wizard-content', promptContext, {
+      targetLanguage: this.getLanguageName(targetLanguage),
+    });
+
+    const userPrompt = promptService.renderUserPrompt('translate-wizard-content', promptContext, {
+      content,
+    });
+
+    try {
+      const response = await this.provider.generateResponse({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: this.temperature,
+        maxTokens: this.maxTokens,
+        extraBody: this.extraBody,
+      });
+
+      log('Wizard content translated', {
+        originalLength: content.length,
+        translatedLength: response.content.length,
+      });
+
+      return { translatedContent: response.content.trim() };
+    } catch (error) {
+      log('Wizard content translation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Module 7: Batch translate wizard content (all fields in one API call)
+   * Takes a flat object of labeled strings and returns translations for all.
+   */
+  async translateWizardBatch(
+    fields: Record<string, string>,
+    targetLanguage: string
+  ): Promise<Record<string, string>> {
+    // Skip if target is English
+    if (targetLanguage === 'en') {
+      return fields;
+    }
+
+    // Filter out empty fields
+    const nonEmptyFields: Record<string, string> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value && value.trim()) {
+        nonEmptyFields[key] = value;
+      }
+    }
+
+    // If no fields to translate, return original
+    if (Object.keys(nonEmptyFields).length === 0) {
+      return fields;
+    }
+
+    log('translateWizardBatch called', {
+      fieldCount: Object.keys(nonEmptyFields).length,
+      targetLanguage,
+    });
+
+    const languageName = this.getLanguageName(targetLanguage);
+
+    // Build numbered format for more reliable parsing
+    const fieldKeys = Object.keys(nonEmptyFields);
+    const inputLines = fieldKeys.map((key, i) => `[${i + 1}] ${nonEmptyFields[key]}`);
+    const inputText = inputLines.join('\n\n');
+
+    const systemPrompt = `You are a translator. Translate each numbered item to ${languageName}.
+
+RULES:
+- Output ALL ${fieldKeys.length} items with their numbers
+- Keep the exact format: [number] translated text
+- For names/proper nouns: translate phonetically or keep as-is, but ALWAYS include the item
+- Do not skip any items, do not add explanations
+
+Example input:
+[1] Hello world
+[2] John Smith
+
+Example output:
+[1] Hola mundo
+[2] John Smith`;
+
+    const userPrompt = `Translate these ${fieldKeys.length} items to ${languageName}:\n\n${inputText}`;
+
+    try {
+      const response = await this.provider.generateResponse({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: this.temperature,
+        maxTokens: this.maxTokens,
+        extraBody: this.extraBody,
+      });
+
+      // Parse the response back into a record
+      const result: Record<string, string> = { ...fields }; // Start with original (fallback)
+      const responseText = response.content.trim();
+
+      // Parse [number] content format - more flexible regex
+      const itemRegex = /\[(\d+)\]\s*([\s\S]*?)(?=\n*\[\d+\]|$)/g;
+      let match;
+      while ((match = itemRegex.exec(responseText)) !== null) {
+        const index = parseInt(match[1], 10) - 1; // Convert to 0-based
+        const value = match[2].trim();
+        if (index >= 0 && index < fieldKeys.length && value) {
+          result[fieldKeys[index]] = value;
+        }
+      }
+
+      // Debug: log if we didn't parse all expected fields
+      const parsedCount = fieldKeys.filter(k => result[k] !== fields[k]).length;
+      if (parsedCount < fieldKeys.length) {
+        log('Batch translation parsing may have missed fields', {
+          expected: fieldKeys,
+          parsedCount,
+          responsePreview: responseText.substring(0, 500),
+        });
+      }
+
+      log('Wizard batch translated', {
+        inputFields: Object.keys(nonEmptyFields).length,
+        outputFields: Object.keys(result).length,
+      });
+
+      return result;
+    } catch (error) {
+      log('Wizard batch translation failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Check if translation should be performed based on settings
    */
   static shouldTranslate(translationSettings: TranslationSettings): boolean {

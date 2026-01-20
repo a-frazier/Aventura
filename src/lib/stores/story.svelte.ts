@@ -2618,6 +2618,14 @@ async createStoryFromWizard(data: {
     systemPrompt: string;
     characters: Partial<Character>[];
     importedEntries?: ImportedEntry[];
+    // Translation data (optional)
+    translations?: {
+      language: string;
+      openingScene?: string;
+      protagonist?: { name?: string; description?: string };
+      startingLocation?: { name?: string; description?: string };
+      characters?: { [originalName: string]: { name?: string; description?: string; relationship?: string } };
+    };
   }): Promise<Story> {
 log('createStoryFromWizard called', {
       title: data.title,
@@ -2658,6 +2666,7 @@ settings: {
 
     // Add protagonist
     if (data.protagonist.name) {
+      const protagonistTranslation = data.translations?.protagonist;
       const protagonist: Character = {
         id: crypto.randomUUID(),
         storyId,
@@ -2670,6 +2679,9 @@ settings: {
         visualDescriptors: data.protagonist.visualDescriptors ?? [],
         portrait: data.protagonist.portrait ?? null,
         branchId: null, // New stories start on main branch
+        translatedName: protagonistTranslation?.name ?? null,
+        translatedDescription: protagonistTranslation?.description ?? null,
+        translationLanguage: protagonistTranslation ? data.translations?.language ?? null : null,
       };
       await database.addCharacter(protagonist);
       log('Added protagonist:', protagonist.name);
@@ -2677,6 +2689,13 @@ settings: {
 
     // Add starting location
     if (data.startingLocation.name) {
+      const locationTranslation = data.translations?.startingLocation;
+      log('Starting location translation data:', {
+        hasTranslations: !!data.translations,
+        hasStartingLocation: !!locationTranslation,
+        translatedName: locationTranslation?.name,
+        translatedDesc: locationTranslation?.description?.substring(0, 50),
+      });
       const location: Location = {
         id: crypto.randomUUID(),
         storyId,
@@ -2687,9 +2706,18 @@ settings: {
         connections: [],
         metadata: { source: 'wizard' },
         branchId: null, // New stories start on main branch
+        translatedName: locationTranslation?.name ?? null,
+        translatedDescription: locationTranslation?.description ?? null,
+        translationLanguage: locationTranslation ? data.translations?.language ?? null : null,
       };
+      log('Location object being stored:', {
+        name: location.name,
+        translatedName: location.translatedName,
+        translatedDesc: location.translatedDescription?.substring(0, 50),
+        translationLanguage: location.translationLanguage,
+      });
       await database.addLocation(location);
-      log('Added starting location:', location.name);
+      log('Added starting location:', location.name, 'with translation:', !!location.translatedDescription);
     }
 
     // Add initial items
@@ -2712,6 +2740,7 @@ settings: {
     // Add supporting characters
     for (const charData of data.characters) {
       if (!charData.name) continue;
+      const charTranslation = data.translations?.characters?.[charData.name];
       const character: Character = {
         id: crypto.randomUUID(),
         storyId,
@@ -2724,6 +2753,10 @@ settings: {
         visualDescriptors: charData.visualDescriptors ?? [],
         portrait: charData.portrait ?? null,
         branchId: null, // New stories start on main branch
+        translatedName: charTranslation?.name ?? null,
+        translatedDescription: charTranslation?.description ?? null,
+        translatedRelationship: charTranslation?.relationship ?? null,
+        translationLanguage: charTranslation ? data.translations?.language ?? null : null,
       };
       await database.addCharacter(character);
       log('Added supporting character:', character.name);
@@ -2742,6 +2775,8 @@ settings: {
         position: 0,
         metadata: { source: 'wizard', tokenCount, timeStart: { ...baseTime }, timeEnd: { ...baseTime } },
         branchId: null,
+        translatedContent: data.translations?.openingScene ?? null,
+        translationLanguage: data.translations?.openingScene ? data.translations?.language ?? null : null,
       });
       log('Added opening scene');
     }

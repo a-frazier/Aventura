@@ -353,8 +353,8 @@ class DatabaseService {
     const db = await this.getDb();
     const now = Date.now();
     await db.execute(
-      `INSERT INTO story_entries (id, story_id, type, content, parent_id, position, created_at, metadata, branch_id, reasoning)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO story_entries (id, story_id, type, content, parent_id, position, created_at, metadata, branch_id, reasoning, translated_content, translation_language, original_input)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         entry.id,
         entry.storyId,
@@ -366,6 +366,9 @@ class DatabaseService {
         entry.metadata ? JSON.stringify(entry.metadata) : null,
         entry.branchId || null,
         entry.reasoning || null,
+        entry.translatedContent || null,
+        entry.translationLanguage || null,
+        entry.originalInput || null,
       ]
     );
     return { ...entry, createdAt: now };
@@ -494,8 +497,8 @@ class DatabaseService {
   async addCharacter(character: Character): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata, branch_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO characters (id, story_id, name, description, relationship, traits, visual_descriptors, portrait, status, metadata, branch_id, translated_name, translated_description, translated_relationship, translation_language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         character.id,
         character.storyId,
@@ -508,6 +511,10 @@ class DatabaseService {
         character.status,
         character.metadata ? JSON.stringify(character.metadata) : null,
         character.branchId || null,
+        character.translatedName || null,
+        character.translatedDescription || null,
+        character.translatedRelationship || null,
+        character.translationLanguage || null,
       ]
     );
   }
@@ -568,8 +575,8 @@ class DatabaseService {
   async addLocation(location: Location): Promise<void> {
     const db = await this.getDb();
     await db.execute(
-      `INSERT INTO locations (id, story_id, name, description, visited, current, connections, metadata, branch_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO locations (id, story_id, name, description, visited, current, connections, metadata, branch_id, translated_name, translated_description, translation_language)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         location.id,
         location.storyId,
@@ -580,6 +587,9 @@ class DatabaseService {
         JSON.stringify(location.connections),
         location.metadata ? JSON.stringify(location.metadata) : null,
         location.branchId || null,
+        location.translatedName || null,
+        location.translatedDescription || null,
+        location.translationLanguage || null,
       ]
     );
   }
@@ -1525,6 +1535,7 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       // Translation fields
       translatedName: row.translated_name || null,
       translatedDescription: row.translated_description || null,
+      translatedRelationship: row.translated_relationship || null,
       translationLanguage: row.translation_language || null,
     };
   }

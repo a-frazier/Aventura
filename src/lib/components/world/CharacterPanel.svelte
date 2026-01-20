@@ -481,9 +481,9 @@
                     <Star class="h-2.5 w-2.5" />
                     Protagonist
                   </span>
-                {:else if character.relationship}
+                {:else if character.relationship || character.translatedRelationship}
                   <span class="text-xs text-surface-500"
-                    >{character.relationship}</span
+                    >{character.translatedRelationship ?? character.relationship}</span
                   >
                 {/if}
               </div>

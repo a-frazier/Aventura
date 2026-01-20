@@ -13,6 +13,8 @@
     type GeneratedOpening,
     type Tense,
   } from "$lib/services/ai/scenario";
+  import { aiService } from "$lib/services/ai";
+  import { TranslationService } from "$lib/services/ai/translation";
   import {
     type ImportedEntry,
     type LorebookImportResult,
@@ -76,6 +78,7 @@
   // Step 3: Setting
   let settingSeed = $state("");
   let expandedSetting = $state<ExpandedSetting | null>(null);
+  let expandedSettingTranslated = $state<ExpandedSetting | null>(null); // Translated version for display
   let isExpandingSetting = $state(false);
   let settingError = $state<string | null>(null);
   let settingElaborationGuidance = $state("");
@@ -85,7 +88,9 @@
 
   // Step 4: Protagonist/Characters
   let protagonist = $state<GeneratedProtagonist | null>(null);
+  let protagonistTranslated = $state<GeneratedProtagonist | null>(null); // Translated version for display
   let supportingCharacters = $state<GeneratedCharacter[]>([]);
+  let supportingCharactersTranslated = $state<GeneratedCharacter[]>([]); // Translated version for display
   let isGeneratingProtagonist = $state(false);
   let isGeneratingCharacters = $state(false);
   let isElaboratingCharacter = $state(false);
@@ -158,11 +163,20 @@
   let storyTitle = $state("");
   let openingGuidance = $state("");
   let generatedOpening = $state<GeneratedOpening | null>(null);
+  let generatedOpeningTranslated = $state<GeneratedOpening | null>(null); // Translated version for display
   let isGeneratingOpening = $state(false);
   let isRefiningOpening = $state(false);
   let openingError = $state<string | null>(null);
   let isEditingOpening = $state(false);
   let openingDraft = $state("");
+
+  // Derived display variables - use translated version when available, fall back to original
+  const expandedSettingDisplay = $derived(expandedSettingTranslated ?? expandedSetting);
+  const protagonistDisplay = $derived(protagonistTranslated ?? protagonist);
+  const supportingCharactersDisplay = $derived(
+    supportingCharactersTranslated.length > 0 ? supportingCharactersTranslated : supportingCharacters
+  );
+  const generatedOpeningDisplay = $derived(generatedOpeningTranslated ?? generatedOpening);
 
   // Check if API key is configured
   const needsApiKey = $derived(settings.needsApiKey);
@@ -285,6 +299,20 @@
       );
       clearSettingEditState();
       settingElaborationGuidance = "";
+
+      // Translate setting content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (expandedSetting && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          expandedSettingTranslated = await translateExpandedSetting(expandedSetting, translationSettings.targetLanguage);
+          console.log("[Wizard] Setting translated for display");
+        } catch (translationError) {
+          console.error("Setting translation failed (non-fatal):", translationError);
+          expandedSettingTranslated = null;
+        }
+      } else {
+        expandedSettingTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to expand setting:", error);
       settingError =
@@ -321,6 +349,20 @@
       );
       clearSettingEditState();
       settingElaborationGuidance = "";
+
+      // Translate setting content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (expandedSetting && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          expandedSettingTranslated = await translateExpandedSetting(expandedSetting, translationSettings.targetLanguage);
+          console.log("[Wizard] Refined setting translated for display");
+        } catch (translationError) {
+          console.error("Setting translation failed (non-fatal):", translationError);
+          expandedSettingTranslated = null;
+        }
+      } else {
+        expandedSettingTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to refine setting:", error);
       settingError =
@@ -424,6 +466,20 @@
         customGenre || undefined,
         settings.servicePresetAssignments["wizard:protagonistGeneration"],
       );
+
+      // Translate protagonist content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (protagonist && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          protagonistTranslated = await translateProtagonist(protagonist, translationSettings.targetLanguage);
+          console.log("[Wizard] Protagonist translated for display");
+        } catch (translationError) {
+          console.error("Protagonist translation failed (non-fatal):", translationError);
+          protagonistTranslated = null;
+        }
+      } else {
+        protagonistTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to generate protagonist:", error);
       protagonistError =
@@ -575,6 +631,20 @@
       );
       showManualInput = false;
       characterElaborationGuidance = "";
+
+      // Translate protagonist content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (protagonist && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          protagonistTranslated = await translateProtagonist(protagonist, translationSettings.targetLanguage);
+          console.log("[Wizard] Elaborated character translated for display");
+        } catch (translationError) {
+          console.error("Character translation failed (non-fatal):", translationError);
+          protagonistTranslated = null;
+        }
+      } else {
+        protagonistTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to elaborate character:", error);
       protagonistError =
@@ -602,6 +672,20 @@
         characterElaborationGuidance.trim() || undefined,
       );
       characterElaborationGuidance = "";
+
+      // Translate protagonist content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (protagonist && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          protagonistTranslated = await translateProtagonist(protagonist, translationSettings.targetLanguage);
+          console.log("[Wizard] Refined character translated for display");
+        } catch (translationError) {
+          console.error("Character translation failed (non-fatal):", translationError);
+          protagonistTranslated = null;
+        }
+      } else {
+        protagonistTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to refine character:", error);
       protagonistError =
@@ -637,6 +721,24 @@
         customGenre || undefined,
         settings.servicePresetAssignments["wizard:supportingCharacters"],
       );
+
+      // Translate supporting characters if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (supportingCharacters.length > 0 && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          supportingCharactersTranslated = await Promise.all(
+            supportingCharacters.map((char) =>
+              translateSupportingCharacter(char, translationSettings.targetLanguage)
+            )
+          );
+          console.log("[Wizard] Supporting characters translated for display");
+        } catch (translationError) {
+          console.error("Supporting characters translation failed (non-fatal):", translationError);
+          supportingCharactersTranslated = [];
+        }
+      } else {
+        supportingCharactersTranslated = [];
+      }
     } catch (error) {
       console.error("Failed to generate characters:", error);
     } finally {
@@ -809,6 +911,62 @@
         settings.servicePresetAssignments["wizard:openingGeneration"],
         lorebookContext,
       );
+
+      // Translate wizard content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (generatedOpening && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          // Build flat fields object for batch translation
+          const fields: Record<string, string> = {
+            scene: generatedOpening.scene,
+            title: generatedOpening.title,
+          };
+          if (generatedOpening.initialLocation?.name) {
+            fields.locName = generatedOpening.initialLocation.name;
+          }
+          if (generatedOpening.initialLocation?.description) {
+            fields.locDesc = generatedOpening.initialLocation.description;
+          }
+
+          // Single batch translation call
+          const translated = await aiService.translateWizardBatch(fields, translationSettings.targetLanguage);
+
+          // Debug: log what we got back from batch translation
+          console.log("[Wizard] Opening batch translation result:", {
+            inputFields: Object.keys(fields),
+            outputFields: Object.keys(translated),
+            hasLocName: !!translated.locName,
+            hasLocDesc: !!translated.locDesc,
+            locName: translated.locName,
+            locDesc: translated.locDesc?.substring(0, 100),
+          });
+
+          generatedOpeningTranslated = {
+            ...generatedOpening,
+            scene: translated.scene || generatedOpening.scene,
+            title: translated.title || generatedOpening.title,
+            initialLocation: generatedOpening.initialLocation
+              ? {
+                  name: translated.locName || generatedOpening.initialLocation.name,
+                  description: translated.locDesc || generatedOpening.initialLocation.description,
+                }
+              : generatedOpening.initialLocation,
+          };
+          console.log("[Wizard] Opening translated for display", {
+            hasInitialLocation: !!generatedOpeningTranslated.initialLocation,
+            locName: generatedOpeningTranslated.initialLocation?.name,
+            locDesc: generatedOpeningTranslated.initialLocation?.description?.substring(0, 50),
+            originalLocName: generatedOpening.initialLocation?.name,
+            translatedLocName: translated.locName,
+            translatedLocDesc: translated.locDesc?.substring(0, 50),
+          });
+        } catch (translationError) {
+          console.error("Opening translation failed (non-fatal):", translationError);
+          generatedOpeningTranslated = null;
+        }
+      } else {
+        generatedOpeningTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to generate opening:", error);
       openingError =
@@ -896,6 +1054,45 @@
         lorebookContext,
       );
       clearOpeningEditState();
+
+      // Translate wizard content if enabled (store in separate variable for display)
+      const translationSettings = settings.translationSettings;
+      if (generatedOpening && TranslationService.shouldTranslate(translationSettings)) {
+        try {
+          // Build flat fields object for batch translation
+          const fields: Record<string, string> = {
+            scene: generatedOpening.scene,
+            title: generatedOpening.title,
+          };
+          if (generatedOpening.initialLocation?.name) {
+            fields.locName = generatedOpening.initialLocation.name;
+          }
+          if (generatedOpening.initialLocation?.description) {
+            fields.locDesc = generatedOpening.initialLocation.description;
+          }
+
+          // Single batch translation call
+          const translated = await aiService.translateWizardBatch(fields, translationSettings.targetLanguage);
+
+          generatedOpeningTranslated = {
+            ...generatedOpening,
+            scene: translated.scene || generatedOpening.scene,
+            title: translated.title || generatedOpening.title,
+            initialLocation: generatedOpening.initialLocation
+              ? {
+                  name: translated.locName || generatedOpening.initialLocation.name,
+                  description: translated.locDesc || generatedOpening.initialLocation.description,
+                }
+              : generatedOpening.initialLocation,
+          };
+          console.log("[Wizard] Refined opening translated for display");
+        } catch (translationError) {
+          console.error("Opening translation failed (non-fatal):", translationError);
+          generatedOpeningTranslated = null;
+        }
+      } else {
+        generatedOpeningTranslated = null;
+      }
     } catch (error) {
       console.error("Failed to refine opening:", error);
       openingError =
@@ -1034,15 +1231,173 @@
           : [],
     }));
 
+    // Build translations object if we have translations
+    const translationSettings = settings.translationSettings;
+    let translations: {
+      language: string;
+      openingScene?: string;
+      protagonist?: { name?: string; description?: string };
+      startingLocation?: { name?: string; description?: string };
+      characters?: { [originalName: string]: { name?: string; description?: string; relationship?: string } };
+    } | undefined;
+
+    if (TranslationService.shouldTranslate(translationSettings)) {
+      const targetLanguage = translationSettings.targetLanguage;
+      translations = { language: targetLanguage };
+
+      // Opening scene translation
+      if (generatedOpeningTranslated?.scene) {
+        translations.openingScene = generatedOpeningTranslated.scene;
+      }
+
+      // Protagonist translation
+      if (protagonistTranslated) {
+        translations.protagonist = {
+          name: protagonistTranslated.name,
+          description: protagonistTranslated.description,
+        };
+      }
+
+      // Starting location translation (from opening's initialLocation)
+      if (generatedOpeningTranslated?.initialLocation) {
+        translations.startingLocation = {
+          name: generatedOpeningTranslated.initialLocation.name,
+          description: generatedOpeningTranslated.initialLocation.description,
+        };
+      }
+
+      // Supporting characters translation - key by processed name (after placeholder replacement)
+      if (supportingCharactersTranslated.length > 0) {
+        translations.characters = {};
+        for (let i = 0; i < supportingCharacters.length; i++) {
+          const processed = processedCharacters[i];
+          const translated = supportingCharactersTranslated[i];
+          // Use processed name as key since createStoryFromWizard looks up by processed name
+          if (processed?.name && translated) {
+            translations.characters[processed.name] = {
+              name: translated.name,
+              description: translated.description,
+              relationship: translated.relationship,
+            };
+          }
+        }
+      }
+
+      // Debug: log what translations we're passing
+      console.log("[Wizard] Translations being passed to createStoryFromWizard:", {
+        hasOpeningScene: !!translations.openingScene,
+        hasProtagonist: !!translations.protagonist,
+        hasStartingLocation: !!translations.startingLocation,
+        startingLocation: translations.startingLocation,
+        characterCount: translations.characters ? Object.keys(translations.characters).length : 0,
+        characters: translations.characters,
+      });
+    }
+
     const newStory = await story.createStoryFromWizard({
       ...storyData,
       importedEntries:
         processedEntries.length > 0 ? processedEntries : undefined,
+      translations,
     });
 
     await story.loadStory(newStory.id);
     ui.setActivePanel("story");
     onClose();
+  }
+
+  // Translation helper functions - using batch translation for efficiency
+  async function translateExpandedSetting(setting: ExpandedSetting, targetLanguage: string): Promise<ExpandedSetting> {
+    // Build flat fields object for batch translation
+    const fields: Record<string, string> = {
+      name: setting.name,
+      description: setting.description,
+    };
+
+    if (setting.atmosphere) fields.atmosphere = setting.atmosphere;
+    if (setting.themes?.length) fields.themes = setting.themes.join(", ");
+    if (setting.potentialConflicts?.length) fields.conflicts = setting.potentialConflicts.join("; ");
+
+    // Add key locations with indexed keys
+    (setting.keyLocations || []).forEach((loc, i) => {
+      fields[`loc_${i}_name`] = loc.name;
+      if (loc.description) fields[`loc_${i}_desc`] = loc.description;
+    });
+
+    // Single batch translation call
+    const translated = await aiService.translateWizardBatch(fields, targetLanguage);
+
+    // Reconstruct key locations
+    const translatedLocations = (setting.keyLocations || []).map((loc, i) => ({
+      name: translated[`loc_${i}_name`] || loc.name,
+      description: translated[`loc_${i}_desc`] || loc.description,
+    }));
+
+    return {
+      ...setting,
+      name: translated.name || setting.name,
+      description: translated.description || setting.description,
+      atmosphere: translated.atmosphere || setting.atmosphere,
+      keyLocations: translatedLocations,
+      themes: translated.themes
+        ? translated.themes.split(",").map((t) => t.trim()).filter(Boolean)
+        : setting.themes,
+      potentialConflicts: translated.conflicts
+        ? translated.conflicts.split(";").map((c) => c.trim()).filter(Boolean)
+        : setting.potentialConflicts,
+    };
+  }
+
+  async function translateProtagonist(char: GeneratedProtagonist, targetLanguage: string): Promise<GeneratedProtagonist> {
+    // Build flat fields object for batch translation
+    const fields: Record<string, string> = {
+      name: char.name,
+      description: char.description,
+    };
+
+    if (char.background) fields.background = char.background;
+    if (char.motivation) fields.motivation = char.motivation;
+    if (char.traits?.length) fields.traits = char.traits.join(", ");
+
+    // Single batch translation call
+    const translated = await aiService.translateWizardBatch(fields, targetLanguage);
+
+    return {
+      ...char,
+      name: translated.name || char.name,
+      description: translated.description || char.description,
+      background: translated.background || char.background,
+      motivation: translated.motivation || char.motivation,
+      traits: translated.traits
+        ? translated.traits.split(",").map((t) => t.trim()).filter(Boolean)
+        : char.traits,
+    };
+  }
+
+  async function translateSupportingCharacter(char: GeneratedCharacter, targetLanguage: string): Promise<GeneratedCharacter> {
+    // Build flat fields object for batch translation
+    const fields: Record<string, string> = {
+      name: char.name,
+      description: char.description,
+    };
+
+    if (char.role) fields.role = char.role;
+    if (char.relationship) fields.relationship = char.relationship;
+    if (char.traits?.length) fields.traits = char.traits.join(", ");
+
+    // Single batch translation call
+    const translated = await aiService.translateWizardBatch(fields, targetLanguage);
+
+    return {
+      ...char,
+      name: translated.name || char.name,
+      description: translated.description || char.description,
+      role: translated.role || char.role,
+      relationship: translated.relationship || char.relationship,
+      traits: translated.traits
+        ? translated.traits.split(",").map((t) => t.trim()).filter(Boolean)
+        : char.traits,
+    };
   }
 
   // Step titles
@@ -1643,7 +1998,7 @@
       {:else if currentStep === 4}
         <Step4Setting
           {settingSeed}
-          {expandedSetting}
+          expandedSetting={expandedSettingDisplay}
           {settingElaborationGuidance}
           {isExpandingSetting}
           {settingError}
@@ -1675,8 +2030,8 @@
       {:else if currentStep === 5}
         <Step5Characters
           {selectedMode}
-          {expandedSetting}
-          {protagonist}
+          expandedSetting={expandedSettingDisplay}
+          protagonist={protagonistDisplay}
           {manualCharacterName}
           {manualCharacterDescription}
           {manualCharacterBackground}
@@ -1703,8 +2058,8 @@
         />
       {:else if currentStep === 6}
         <Step6SupportingCast
-          {protagonist}
-          {supportingCharacters}
+          protagonist={protagonistDisplay}
+          supportingCharacters={supportingCharactersDisplay}
           {showSupportingCharacterForm}
           {editingSupportingCharacterIndex}
           {supportingCharacterName}
@@ -1779,7 +2134,7 @@
         <Step9Opening
           {storyTitle}
           {openingGuidance}
-          {generatedOpening}
+          generatedOpening={generatedOpeningDisplay}
           {isGeneratingOpening}
           {isRefiningOpening}
           {isEditingOpening}
@@ -1793,8 +2148,8 @@
           {customGenre}
           {selectedPOV}
           {selectedTense}
-          {expandedSetting}
-          {protagonist}
+          expandedSetting={expandedSettingDisplay}
+          protagonist={protagonistDisplay}
           importedEntriesCount={importedEntries.length}
           onTitleChange={(v) => (storyTitle = v)}
           onGuidanceChange={(v) => (openingGuidance = v)}

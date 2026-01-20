@@ -1257,6 +1257,9 @@ class SettingsStore {
     'translation:narration': 'translation',
     'translation:input': 'translation',
     'translation:ui': 'translation',
+    'translation:suggestions': 'translation',
+    'translation:actionChoices': 'translation',
+    'translation:wizard': 'translation',
   });
 
   serviceSpecificSettings = $state<ServiceSpecificSettings>(getDefaultServiceSpecificSettings());
