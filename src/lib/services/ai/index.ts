@@ -14,6 +14,7 @@ import { ContextBuilder, type ContextResult, type ContextConfig, DEFAULT_CONTEXT
 import { EntryRetrievalService, getEntryRetrievalConfigFromSettings, type EntryRetrievalResult, type ActivationTracker } from './entryRetrieval';
 import { ImageGenerationService, type ImageGenerationContext } from './imageGeneration';
 import { inlineImageService, type InlineImageContext } from './inlineImageGeneration';
+import { TranslationService, type TranslationResult, type UITranslationItem } from './translation';
 import { buildExtraBody } from './requestOverrides';
 import type { Message, GenerationResponse, StreamChunk } from './types';
 import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, MemoryConfig, Entry, LoreManagementResult, TimeTracker } from '$lib/types';
@@ -1255,6 +1256,66 @@ class AIService {
     // by the macro engine based on visualProseMode/inlineImageMode in the context
 
     return basePrompt;
+  }
+
+  // ===== Translation Methods =====
+
+  /**
+   * Translate narrative content to the target language.
+   * Used for post-generation translation of AI responses.
+   */
+  async translateNarration(
+    content: string,
+    targetLanguage: string,
+    isVisualProse: boolean = false
+  ): Promise<TranslationResult> {
+    log('translateNarration called', {
+      contentLength: content.length,
+      targetLanguage,
+      isVisualProse,
+    });
+
+    const presetId = settings.getServicePresetId('translation:narration');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateNarration(content, targetLanguage, isVisualProse);
+  }
+
+  /**
+   * Translate user input to English for AI processing.
+   * The original input is preserved for display.
+   */
+  async translateInput(
+    content: string,
+    sourceLanguage: string
+  ): Promise<TranslationResult> {
+    log('translateInput called', {
+      contentLength: content.length,
+      sourceLanguage,
+    });
+
+    const presetId = settings.getServicePresetId('translation:input');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateInput(content, sourceLanguage);
+  }
+
+  /**
+   * Batch translate UI elements (world state names/descriptions).
+   */
+  async translateUIElements(
+    items: UITranslationItem[],
+    targetLanguage: string
+  ): Promise<UITranslationItem[]> {
+    log('translateUIElements called', {
+      itemCount: items.length,
+      targetLanguage,
+    });
+
+    const presetId = settings.getServicePresetId('translation:ui');
+    const provider = this.getProviderForProfile(settings.getPresetConfig(presetId, 'Translation').profileId);
+    const translationService = new TranslationService(provider, presetId);
+    return await translationService.translateUIElements(items, targetLanguage);
   }
 }
 

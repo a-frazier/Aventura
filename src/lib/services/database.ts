@@ -439,6 +439,19 @@ class DatabaseService {
       setClauses.push('reasoning = ?');
       values.push(updates.reasoning || null);
     }
+    // Translation fields
+    if (updates.translatedContent !== undefined) {
+      setClauses.push('translated_content = ?');
+      values.push(updates.translatedContent || null);
+    }
+    if (updates.translationLanguage !== undefined) {
+      setClauses.push('translation_language = ?');
+      values.push(updates.translationLanguage || null);
+    }
+    if (updates.originalInput !== undefined) {
+      setClauses.push('original_input = ?');
+      values.push(updates.originalInput || null);
+    }
 
     if (setClauses.length === 0) return;
     values.push(id);
@@ -512,6 +525,10 @@ class DatabaseService {
     if (updates.portrait !== undefined) { setClauses.push('portrait = ?'); values.push(updates.portrait); }
     if (updates.status !== undefined) { setClauses.push('status = ?'); values.push(updates.status); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
+    // Translation fields
+    if (updates.translatedName !== undefined) { setClauses.push('translated_name = ?'); values.push(updates.translatedName || null); }
+    if (updates.translatedDescription !== undefined) { setClauses.push('translated_description = ?'); values.push(updates.translatedDescription || null); }
+    if (updates.translationLanguage !== undefined) { setClauses.push('translation_language = ?'); values.push(updates.translationLanguage || null); }
 
     if (setClauses.length === 0) return;
     values.push(id);
@@ -584,6 +601,10 @@ class DatabaseService {
     if (updates.current !== undefined) { setClauses.push('current = ?'); values.push(updates.current ? 1 : 0); }
     if (updates.connections !== undefined) { setClauses.push('connections = ?'); values.push(JSON.stringify(updates.connections)); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
+    // Translation fields
+    if (updates.translatedName !== undefined) { setClauses.push('translated_name = ?'); values.push(updates.translatedName || null); }
+    if (updates.translatedDescription !== undefined) { setClauses.push('translated_description = ?'); values.push(updates.translatedDescription || null); }
+    if (updates.translationLanguage !== undefined) { setClauses.push('translation_language = ?'); values.push(updates.translationLanguage || null); }
 
     if (setClauses.length === 0) return;
     values.push(id);
@@ -650,6 +671,10 @@ class DatabaseService {
     if (updates.equipped !== undefined) { setClauses.push('equipped = ?'); values.push(updates.equipped ? 1 : 0); }
     if (updates.location !== undefined) { setClauses.push('location = ?'); values.push(updates.location); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
+    // Translation fields
+    if (updates.translatedName !== undefined) { setClauses.push('translated_name = ?'); values.push(updates.translatedName || null); }
+    if (updates.translatedDescription !== undefined) { setClauses.push('translated_description = ?'); values.push(updates.translatedDescription || null); }
+    if (updates.translationLanguage !== undefined) { setClauses.push('translation_language = ?'); values.push(updates.translationLanguage || null); }
 
     if (setClauses.length === 0) return;
     values.push(id);
@@ -673,6 +698,10 @@ class DatabaseService {
     if (updates.triggeredAt !== undefined) { setClauses.push('triggered_at = ?'); values.push(updates.triggeredAt); }
     if (updates.resolvedAt !== undefined) { setClauses.push('resolved_at = ?'); values.push(updates.resolvedAt); }
     if (updates.metadata !== undefined) { setClauses.push('metadata = ?'); values.push(JSON.stringify(updates.metadata)); }
+    // Translation fields
+    if (updates.translatedTitle !== undefined) { setClauses.push('translated_title = ?'); values.push(updates.translatedTitle || null); }
+    if (updates.translatedDescription !== undefined) { setClauses.push('translated_description = ?'); values.push(updates.translatedDescription || null); }
+    if (updates.translationLanguage !== undefined) { setClauses.push('translation_language = ?'); values.push(updates.translationLanguage || null); }
 
     if (setClauses.length === 0) return;
     values.push(id);
@@ -1473,6 +1502,10 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
       branchId: row.branch_id || null,
       reasoning: row.reasoning || undefined,
+      // Translation fields
+      translatedContent: row.translated_content || null,
+      translationLanguage: row.translation_language || null,
+      originalInput: row.original_input || null,
     };
   }
 
@@ -1489,6 +1522,10 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       status: row.status,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
       branchId: row.branch_id || null,
+      // Translation fields
+      translatedName: row.translated_name || null,
+      translatedDescription: row.translated_description || null,
+      translationLanguage: row.translation_language || null,
     };
   }
 
@@ -1503,6 +1540,10 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       connections: row.connections ? JSON.parse(row.connections) : [],
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
       branchId: row.branch_id || null,
+      // Translation fields
+      translatedName: row.translated_name || null,
+      translatedDescription: row.translated_description || null,
+      translationLanguage: row.translation_language || null,
     };
   }
 
@@ -1517,6 +1558,10 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       location: row.location,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
       branchId: row.branch_id || null,
+      // Translation fields
+      translatedName: row.translated_name || null,
+      translatedDescription: row.translated_description || null,
+      translationLanguage: row.translation_language || null,
     };
   }
 
@@ -1532,6 +1577,10 @@ private mapEmbeddedImage(row: any): EmbeddedImage {
       resolvedAt: row.resolved_at ?? null,
       metadata: row.metadata ? JSON.parse(row.metadata) : null,
       branchId: row.branch_id || null,
+      // Translation fields
+      translatedTitle: row.translated_title || null,
+      translatedDescription: row.translated_description || null,
+      translationLanguage: row.translation_language || null,
     };
   }
 

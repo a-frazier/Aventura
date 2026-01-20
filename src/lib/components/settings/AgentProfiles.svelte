@@ -18,6 +18,7 @@
     Clock,
     Download,
     Wand2,
+    Languages,
   } from "lucide-svelte";
   import ModelSelector from "./ModelSelector.svelte";
 
@@ -175,6 +176,25 @@
       icon: Wand2,
       description: "Refines story opening",
     },
+    // Translation tasks
+    {
+      id: "translation:narration",
+      label: "Translate Narration",
+      icon: Languages,
+      description: "Translates AI responses",
+    },
+    {
+      id: "translation:input",
+      label: "Translate Input",
+      icon: Languages,
+      description: "Translates user input to English",
+    },
+    {
+      id: "translation:ui",
+      label: "Translate UI",
+      icon: Languages,
+      description: "Translates world state elements",
+    },
   ] as const;
 
   // State
@@ -211,6 +231,10 @@
     "wizard:supportingCharacters": "wizard",
     "wizard:openingGeneration": "wizard",
     "wizard:openingRefinement": "wizard",
+    // Translation
+    "translation:narration": "translation",
+    "translation:input": "translation",
+    "translation:ui": "translation",
   };
 
   function getReasoningIndex(value?: string): number {

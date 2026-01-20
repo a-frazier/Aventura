@@ -8,6 +8,7 @@
   import { SimpleActivationTracker } from "$lib/services/ai/entryRetrieval";
   import type { ImageGenerationContext } from "$lib/services/ai/imageGeneration";
   import type { TimelineFillResult } from "$lib/services/ai/timelineFill";
+  import { TranslationService } from "$lib/services/ai/translation";
   import {
     Send,
     Wand2,
@@ -962,6 +963,31 @@
         // Emit NarrativeResponse event
         emitNarrativeResponse(narrationEntry.id, fullResponse);
 
+        // Phase 2.4: Translate narration if enabled (background, non-blocking)
+        const translationSettingsRef = settings.translationSettings;
+        if (TranslationService.shouldTranslateNarration(translationSettingsRef)) {
+          const isVisualProse = story.currentStory?.settings?.visualProseMode ?? false;
+          const targetLang = translationSettingsRef.targetLanguage;
+          const entryIdForTranslation = narrationEntry.id;
+
+          // Run translation async (non-blocking) - don't await
+          (async () => {
+            try {
+              log("Translating narration", { entryId: entryIdForTranslation, isVisualProse, targetLang });
+              const result = await aiService.translateNarration(fullResponse, targetLang, isVisualProse);
+              await database.updateStoryEntry(entryIdForTranslation, {
+                translatedContent: result.translatedContent,
+                translationLanguage: targetLang,
+              });
+              // Refresh the entry in the store to show translated content
+              await story.refreshEntry(entryIdForTranslation);
+              log("Narration translated", { entryId: entryIdForTranslation });
+            } catch (error) {
+              log("Narration translation failed (non-fatal)", error);
+            }
+          })();
+        }
+
         // Phase 2.5: Trigger TTS for auto-play if enabled (background, non-blocking)
         // Do this IMMEDIATELY after text generation is complete, before classification
         const ttsSettings = settings.systemServicesSettings.tts;
@@ -1008,6 +1034,95 @@
           await story.applyClassificationResult(classificationResult);
           log("World state updated from classification");
           ui.setGenerationStatus("Saving...");
+
+          // Phase 4.5: Translate world state elements if enabled (background, non-blocking)
+          const translationSettingsForUI = settings.translationSettings;
+          if (TranslationService.shouldTranslateWorldState(translationSettingsForUI)) {
+            const targetLangForUI = translationSettingsForUI.targetLanguage;
+
+            // Run translation async (non-blocking) - don't await
+            (async () => {
+              try {
+                // Collect items to translate from classification result
+                const itemsToTranslate: { id: string; text: string; type: 'name' | 'description' | 'title'; entityType: string; field: string }[] = [];
+
+                // New characters
+                for (const char of classificationResult.entryUpdates.newCharacters) {
+                  const dbChar = story.characters.find(c => c.name === char.name);
+                  if (dbChar) {
+                    itemsToTranslate.push({ id: `${dbChar.id}:name`, text: char.name, type: 'name', entityType: 'character', field: 'translatedName' });
+                    if (char.description) {
+                      itemsToTranslate.push({ id: `${dbChar.id}:desc`, text: char.description, type: 'description', entityType: 'character', field: 'translatedDescription' });
+                    }
+                  }
+                }
+
+                // New locations
+                for (const loc of classificationResult.entryUpdates.newLocations) {
+                  const dbLoc = story.locations.find(l => l.name === loc.name);
+                  if (dbLoc) {
+                    itemsToTranslate.push({ id: `${dbLoc.id}:name`, text: loc.name, type: 'name', entityType: 'location', field: 'translatedName' });
+                    if (loc.description) {
+                      itemsToTranslate.push({ id: `${dbLoc.id}:desc`, text: loc.description, type: 'description', entityType: 'location', field: 'translatedDescription' });
+                    }
+                  }
+                }
+
+                // New items
+                for (const item of classificationResult.entryUpdates.newItems) {
+                  const dbItem = story.items.find(i => i.name === item.name);
+                  if (dbItem) {
+                    itemsToTranslate.push({ id: `${dbItem.id}:name`, text: item.name, type: 'name', entityType: 'item', field: 'translatedName' });
+                    if (item.description) {
+                      itemsToTranslate.push({ id: `${dbItem.id}:desc`, text: item.description, type: 'description', entityType: 'item', field: 'translatedDescription' });
+                    }
+                  }
+                }
+
+                // New story beats
+                for (const beat of classificationResult.entryUpdates.newStoryBeats) {
+                  const dbBeat = story.storyBeats.find(b => b.title === beat.title);
+                  if (dbBeat) {
+                    itemsToTranslate.push({ id: `${dbBeat.id}:title`, text: beat.title, type: 'title', entityType: 'storyBeat', field: 'translatedTitle' });
+                    if (beat.description) {
+                      itemsToTranslate.push({ id: `${dbBeat.id}:desc`, text: beat.description, type: 'description', entityType: 'storyBeat', field: 'translatedDescription' });
+                    }
+                  }
+                }
+
+                if (itemsToTranslate.length > 0) {
+                  log("Translating world state elements", { count: itemsToTranslate.length, targetLang: targetLangForUI });
+                  const uiItems = itemsToTranslate.map(item => ({ id: item.id, text: item.text, type: item.type }));
+                  const translated = await aiService.translateUIElements(uiItems, targetLangForUI);
+
+                  // Apply translations to database
+                  for (const translatedItem of translated) {
+                    const [entityId, fieldType] = translatedItem.id.split(':');
+                    const originalItem = itemsToTranslate.find(i => i.id === translatedItem.id);
+                    if (!originalItem) continue;
+
+                    const updateData: Record<string, string | null> = {
+                      [originalItem.field]: translatedItem.text,
+                      translationLanguage: targetLangForUI,
+                    };
+
+                    if (originalItem.entityType === 'character') {
+                      await database.updateCharacter(entityId, updateData as any);
+                    } else if (originalItem.entityType === 'location') {
+                      await database.updateLocation(entityId, updateData as any);
+                    } else if (originalItem.entityType === 'item') {
+                      await database.updateItem(entityId, updateData as any);
+                    } else if (originalItem.entityType === 'storyBeat') {
+                      await database.updateStoryBeat(entityId, updateData as any);
+                    }
+                  }
+                  log("World state elements translated", { count: translated.length });
+                }
+              } catch (error) {
+                log("World state translation failed (non-fatal)", error);
+              }
+            })();
+          }
 
           // Phase 9: Generate images for imageable scenes (background, non-blocking)
           // This runs inside the classification try block because we need the presentCharacterNames
@@ -1220,9 +1335,40 @@
       );
     }
 
+    // Translate user input if enabled (keeps original for display, uses English for AI)
+    let promptContent = content;
+    let originalInput: string | undefined;
+
+    const translationSettings = settings.translationSettings;
+    if (TranslationService.shouldTranslateInput(translationSettings)) {
+      try {
+        log("Translating user input", {
+          sourceLanguage: translationSettings.sourceLanguage,
+        });
+        const result = await aiService.translateInput(
+          content,
+          translationSettings.sourceLanguage
+        );
+        originalInput = content;  // Save original for display
+        promptContent = result.translatedContent;  // Use English for prompt
+        log("Input translated", {
+          originalLength: content.length,
+          translatedLength: promptContent.length,
+        });
+      } catch (error) {
+        log("Input translation failed (non-fatal), using original", error);
+        // Continue with original content if translation fails
+      }
+    }
+
     // Add user action to story
-    const userActionEntry = await story.addEntry("user_action", content);
+    const userActionEntry = await story.addEntry("user_action", promptContent);
     log("User action added to story", { entryId: userActionEntry.id });
+
+    // If translated, store original input for display
+    if (originalInput) {
+      await database.updateStoryEntry(userActionEntry.id, { originalInput });
+    }
 
     // Emit UserInput event
     emitUserInput(

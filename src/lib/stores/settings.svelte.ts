@@ -1,4 +1,4 @@
-import type { APISettings, UISettings, ThemeId, FontSource, UpdateSettings, APIProfile, GenerationPreset } from '$lib/types';
+import type { APISettings, UISettings, ThemeId, FontSource, UpdateSettings, APIProfile, GenerationPreset, TranslationSettings } from '$lib/types';
 import { database } from '$lib/services/database';
 import {
   type AdvancedWizardSettings,
@@ -640,6 +640,18 @@ export function getDefaultTTSSettingsForProvider(provider: ProviderPreset, custo
   };
 }
 
+// Translation settings
+export function getDefaultTranslationSettings(): TranslationSettings {
+  return {
+    enabled: false,
+    sourceLanguage: 'auto',
+    targetLanguage: 'en',
+    translateNarration: true,
+    translateUserInput: true,
+    translateWorldState: true,
+  };
+}
+
 // Character Card Import settings (SillyTavern card conversion)
 export interface CharacterCardImportSettings {
   presetId?: string;
@@ -976,6 +988,18 @@ export function getDefaultGenerationPresetsForProvider(provider: ProviderPreset,
         reasoningEffort: 'off',
         providerOnly: [],
         manualBody: ''
+      },
+      {
+        id: 'translation',
+        name: 'Translation',
+        description: 'Text translation between languages',
+        profileId: null,
+        model,
+        temperature: 0.3,
+        maxTokens: 4096,
+        reasoningEffort: 'off',
+        providerOnly: [],
+        manualBody: ''
       }
     ];
   }
@@ -1042,6 +1066,18 @@ export function getDefaultGenerationPresetsForProvider(provider: ProviderPreset,
         reasoningEffort: 'high',
         providerOnly: [],
         manualBody: ''
+      },
+      {
+        id: 'translation',
+        name: 'Translation',
+        description: 'Text translation between languages',
+        profileId: null,
+        model: 'deepseek/deepseek-v3.2',
+        temperature: 0.3,
+        maxTokens: 4096,
+        reasoningEffort: 'off',
+        providerOnly: [],
+        manualBody: ''
       }
     ];
   }
@@ -1104,6 +1140,18 @@ export function getDefaultGenerationPresetsForProvider(provider: ProviderPreset,
       model: 'deepseek/deepseek-v3.2',
       temperature: 0.7,
       maxTokens: 8192,
+      reasoningEffort: 'off',
+      providerOnly: [],
+      manualBody: ''
+    },
+    {
+      id: 'translation',
+      name: 'Translation',
+      description: 'Text translation between languages',
+      profileId: null,
+      model: 'deepseek/deepseek-v3.2',
+      temperature: 0.3,
+      maxTokens: 4096,
       reasoningEffort: 'off',
       providerOnly: [],
       manualBody: ''
@@ -1179,6 +1227,9 @@ class SettingsStore {
   // Prompt settings (centralized macro-based prompts)
   promptSettings = $state<PromptSettings>(getDefaultPromptSettings());
 
+  // Translation settings
+  translationSettings = $state<TranslationSettings>(getDefaultTranslationSettings());
+
   // Service preset assignments - which preset each service uses
   servicePresetAssignments = $state<Record<string, string>>({
     classifier: 'classification',
@@ -1203,6 +1254,9 @@ class SettingsStore {
     'wizard:supportingCharacters': 'wizard',
     'wizard:openingGeneration': 'wizard',
     'wizard:openingRefinement': 'wizard',
+    'translation:narration': 'translation',
+    'translation:input': 'translation',
+    'translation:ui': 'translation',
   });
 
   serviceSpecificSettings = $state<ServiceSpecificSettings>(getDefaultServiceSpecificSettings());
@@ -1265,6 +1319,18 @@ class SettingsStore {
       model: 'deepseek/deepseek-v3.2',
       temperature: 0.7,
       maxTokens: 8192,
+      reasoningEffort: 'off',
+      providerOnly: [],
+      manualBody: ''
+    },
+    {
+      id: 'translation',
+      name: 'Translation',
+      description: 'Text translation between languages',
+      profileId: null,
+      model: 'deepseek/deepseek-v3.2',
+      temperature: 0.3,
+      maxTokens: 4096,
       reasoningEffort: 'off',
       providerOnly: [],
       manualBody: ''
@@ -1624,6 +1690,18 @@ class SettingsStore {
 
         // Migrate null profileIds to default OpenRouter profile
         await this.migrateNullProfileIds();
+      }
+
+      // Load translation settings
+      const translationSettingsJson = await database.getSetting('translation_settings');
+      if (translationSettingsJson) {
+        try {
+          const loaded = JSON.parse(translationSettingsJson);
+          const defaults = getDefaultTranslationSettings();
+          this.translationSettings = { ...defaults, ...loaded };
+        } catch {
+          this.translationSettings = getDefaultTranslationSettings();
+        }
       }
 
       // Load prompt settings and initialize the prompt service
@@ -2361,6 +2439,21 @@ class SettingsStore {
   async resetServiceSpecificSettings() {
     this.serviceSpecificSettings = getDefaultServiceSpecificSettings();
     await this.saveServiceSpecificSettings();
+  }
+
+  // Translation settings methods
+  async saveTranslationSettings() {
+    await database.setSetting('translation_settings', JSON.stringify(this.translationSettings));
+  }
+
+  async updateTranslationSettings(updates: Partial<TranslationSettings>) {
+    this.translationSettings = { ...this.translationSettings, ...updates };
+    await this.saveTranslationSettings();
+  }
+
+  async resetTranslationSettings() {
+    this.translationSettings = getDefaultTranslationSettings();
+    await this.saveTranslationSettings();
   }
 
   async resetClassifierSettings() {

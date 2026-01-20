@@ -133,6 +133,32 @@ const responseLengthMacro: SimpleMacro = {
 };
 
 // ============================================================================
+// TRANSLATION MACROS
+// ============================================================================
+
+const targetLanguageMacro: SimpleMacro = {
+  id: 'target-language',
+  name: 'Target Language',
+  token: 'targetLanguage',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'The target language for translation (e.g., Spanish, French)',
+  defaultValue: 'English',
+};
+
+const sourceLanguageMacro: SimpleMacro = {
+  id: 'source-language',
+  name: 'Source Language',
+  token: 'sourceLanguage',
+  type: 'simple',
+  builtin: true,
+  dynamic: true,
+  description: 'The source language for translation',
+  defaultValue: 'auto-detect',
+};
+
+// ============================================================================
 // BUILTIN COMPLEX MACROS
 // ============================================================================
 
@@ -648,6 +674,9 @@ export const BUILTIN_MACROS: Macro[] = [
   visualProseBlockMacro,
   inlineImageBlockMacro,
   responseLengthMacro,
+  // Translation macros
+  targetLanguageMacro,
+  sourceLanguageMacro,
   // Complex macros
   styleInstructionMacro,
   responseInstructionMacro,
@@ -769,6 +798,10 @@ export const CONTEXT_PLACEHOLDERS: ContextPlaceholder[] = [
   { id: 'inventory', name: 'Inventory', token: 'inventory', category: 'service', description: 'List of items in the protagonist\'s inventory' },
   { id: 'active-quests', name: 'Active Quests', token: 'activeQuests', category: 'service', description: 'List of currently active quests/story beats' },
   { id: 'length-instruction', name: 'Length Instruction', token: 'lengthInstruction', category: 'service', description: 'Instructions for action choice length based on user\'s writing patterns' },
+
+  // Translation service
+  { id: 'content', name: 'Content', token: 'content', category: 'service', description: 'Text content to translate' },
+  { id: 'elements-json', name: 'Elements JSON', token: 'elementsJson', category: 'service', description: 'JSON array of UI elements to translate (with id, text, type)' },
 ];
 
 /**
@@ -2673,6 +2706,61 @@ Types:
 };
 
 // ============================================================================
+// TRANSLATION PROMPT TEMPLATES
+// ============================================================================
+
+const translateNarrationTemplate: PromptTemplate = {
+  id: 'translate-narration',
+  name: 'Translate Narration',
+  category: 'service',
+  description: 'Translates narrative content to target language',
+  content: `You are a professional literary translator. Translate the following narrative text to {{targetLanguage}}.
+
+Rules:
+1. Preserve the original meaning, tone, and literary style
+2. Keep proper nouns and character names unchanged
+3. Maintain the narrative voice (POV, tense)
+4. Do not add, remove, or interpret content
+5. If the text contains HTML tags, translate ONLY the text content while preserving ALL HTML structure, attributes, and styling exactly as-is
+
+Respond with ONLY the translated text, no explanations or notes.`,
+  userContent: `{{content}}`,
+};
+
+const translateInputTemplate: PromptTemplate = {
+  id: 'translate-input',
+  name: 'Translate User Input',
+  category: 'service',
+  description: 'Translates user input to English for AI processing',
+  content: `You are a translator for interactive fiction. Translate the user's input from {{sourceLanguage}} to English.
+
+Rules:
+1. Preserve the action intent (what the user wants to do/say/think)
+2. Keep character names and proper nouns unchanged
+3. Maintain the tone (casual, formal, urgent, etc.)
+4. Do not add interpretation or expansion
+
+Respond with ONLY the English translation, no explanations.`,
+  userContent: `{{content}}`,
+};
+
+const translateUITemplate: PromptTemplate = {
+  id: 'translate-ui',
+  name: 'Translate UI Elements',
+  category: 'service',
+  description: 'Batch translates world state elements',
+  content: `You are translating game UI elements to {{targetLanguage}}.
+
+Translate each item in the JSON array below. For each item:
+- Translate the "text" field
+- Keep "id" unchanged
+- Preserve proper nouns and character names
+
+Respond with a JSON array in the same format with translated text.`,
+  userContent: `{{elementsJson}}`,
+};
+
+// ============================================================================
 // COMBINED PROMPT TEMPLATES
 // ============================================================================
 
@@ -2700,6 +2788,10 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   imagePromptAnalysisReferenceTemplate,
   imagePortraitGenerationTemplate,
   actionChoicesPromptTemplate,
+  // Translation prompts
+  translateNarrationTemplate,
+  translateInputTemplate,
+  translateUITemplate,
   // Wizard prompts
   settingExpansionPromptTemplate,
   settingRefinementPromptTemplate,

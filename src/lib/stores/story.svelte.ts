@@ -679,12 +679,26 @@ class StoryStore {
     if (!entry) return;
 
     // Update in-memory state
-    this.entries = this.entries.map(e => 
+    this.entries = this.entries.map(e =>
       e.id === entryId ? { ...e, reasoning } : e
     );
 
     // Persist to database
     await database.updateStoryEntry(entryId, { reasoning });
+  }
+
+  /**
+   * Refresh a single entry from the database to pick up changes made directly.
+   * Used when background processes update entries (e.g., translation).
+   */
+  async refreshEntry(entryId: string): Promise<void> {
+    const updatedEntry = await database.getStoryEntry(entryId);
+    if (!updatedEntry) return;
+
+    // Update in-memory state
+    this.entries = this.entries.map(e =>
+      e.id === entryId ? updatedEntry : e
+    );
   }
 
   /**

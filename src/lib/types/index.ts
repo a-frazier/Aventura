@@ -114,6 +114,10 @@ export interface StoryEntry {
   metadata: EntryMetadata | null;
   branchId: string | null;  // Branch this entry belongs to (null = main branch for legacy)
   reasoning?: string; // In-memory only reasoning (chain of thought)
+  // Translation fields
+  translatedContent?: string | null;  // Translated text for display
+  translationLanguage?: string | null;  // Language code of translation
+  originalInput?: string | null;  // Original user input before translation (for user_action type)
 }
 
 export interface EntryMetadata {
@@ -124,6 +128,8 @@ export interface EntryMetadata {
   // Story time tracking - captures in-story time at entry creation and after classification
   timeStart?: TimeTracker;  // Story time when this entry began
   timeEnd?: TimeTracker;    // Story time after classification applied time progression
+  // Translation fields (for backwards compatibility, also stored in columns)
+  originalInput?: string;  // For translateInput: original user text before translation to English
 }
 
 export interface Character {
@@ -138,6 +144,10 @@ export interface Character {
   status: 'active' | 'inactive' | 'deceased';
   metadata: Record<string, unknown> | null;
   branchId: string | null;  // Branch this character belongs to (null = main/inherited)
+  // Translation fields
+  translatedName?: string | null;
+  translatedDescription?: string | null;
+  translationLanguage?: string | null;
 }
 
 // ===== Character Vault Types =====
@@ -302,6 +312,10 @@ export interface Location {
   connections: string[];
   metadata: Record<string, unknown> | null;
   branchId: string | null;  // Branch this location belongs to (null = main/inherited)
+  // Translation fields
+  translatedName?: string | null;
+  translatedDescription?: string | null;
+  translationLanguage?: string | null;
 }
 
 export interface Item {
@@ -314,6 +328,10 @@ export interface Item {
   location: string;
   metadata: Record<string, unknown> | null;
   branchId: string | null;  // Branch this item belongs to (null = main/inherited)
+  // Translation fields
+  translatedName?: string | null;
+  translatedDescription?: string | null;
+  translationLanguage?: string | null;
 }
 
 export interface StoryBeat {
@@ -327,6 +345,10 @@ export interface StoryBeat {
   resolvedAt?: number | null;
   metadata: Record<string, unknown> | null;
   branchId: string | null;  // Branch this beat belongs to (null = main/inherited)
+  // Translation fields
+  translatedTitle?: string | null;
+  translatedDescription?: string | null;
+  translationLanguage?: string | null;
 }
 
 export interface TemplateInitialState {
@@ -799,5 +821,20 @@ export interface ImportPresetConfig {
   reasoningEffort: ReasoningEffort;
   providerOnly: string[];
   manualBody: string;
+}
+
+// ===== Translation System Types =====
+
+/**
+ * Translation settings for multi-language support.
+ * English prompts for LLM quality, translated display for user experience.
+ */
+export interface TranslationSettings {
+  enabled: boolean;
+  sourceLanguage: string;  // 'auto' or ISO code (user's language)
+  targetLanguage: string;  // ISO code (display language)
+  translateNarration: boolean;  // Translate AI responses after generation
+  translateUserInput: boolean;  // Translate user input to English for prompts
+  translateWorldState: boolean;  // Translate world state UI elements
 }
 

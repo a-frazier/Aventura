@@ -836,7 +836,9 @@
         isPlayingTTS = false;
       }
 
-      const textToNarrate = sanitizeTextForTTS(entry.content, {
+      // Use translated content if available, otherwise use original content
+      const ttsContent = entry.translatedContent ?? entry.content;
+      const textToNarrate = sanitizeTextForTTS(ttsContent, {
         removeTags: ttsSettings.removeHtmlTags,
         removeAllTagContent: ttsSettings.removeAllHtmlContent,
         htmlTagsToRemoveContent: ttsSettings.htmlTagsToRemoveContent

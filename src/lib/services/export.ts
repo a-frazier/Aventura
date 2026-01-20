@@ -143,12 +143,16 @@ class ExportService {
 
     markdown += `---\n\n`;
 
-    // Add story entries
+    // Add story entries (use translated content when available)
     for (const entry of entries) {
       if (entry.type === 'user_action') {
-        markdown += `> **You:** ${entry.content}\n\n`;
+        // For user actions, show original input if translation was used, otherwise show content
+        const displayContent = entry.originalInput ?? entry.content;
+        markdown += `> **You:** ${displayContent}\n\n`;
       } else if (entry.type === 'narration') {
-        markdown += `${entry.content}\n\n`;
+        // For narration, use translated content if available
+        const displayContent = entry.translatedContent ?? entry.content;
+        markdown += `${displayContent}\n\n`;
       } else if (entry.type === 'system') {
         markdown += `*[System: ${entry.content}]*\n\n`;
       }
@@ -210,11 +214,16 @@ class ExportService {
 
     text += `---\n\n`;
 
+    // Use translated content when available
     for (const entry of entries) {
       if (entry.type === 'user_action') {
-        text += `> ${entry.content}\n\n`;
+        // For user actions, show original input if translation was used
+        const displayContent = entry.originalInput ?? entry.content;
+        text += `> ${displayContent}\n\n`;
       } else if (entry.type === 'narration') {
-        text += `${entry.content}\n\n`;
+        // For narration, use translated content if available
+        const displayContent = entry.translatedContent ?? entry.content;
+        text += `${displayContent}\n\n`;
       }
     }
 
