@@ -9,7 +9,7 @@
 </script>
 
 {#if isMobile.current}
-	<Drawer.Title class={cn("text-left", className)} {...props}>
+	<Drawer.Title class={cn("", className)} {...props}>
 		{@render children?.()}
 	</Drawer.Title>
 {:else}

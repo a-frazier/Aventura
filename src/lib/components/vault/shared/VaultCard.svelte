@@ -116,14 +116,17 @@
 
       <!-- Main Content -->
       <div class="flex-1 min-w-0 flex flex-col">
-        <div class="flex justify-between items-end gap-2">
+        <div class="flex justify-between items-start gap-2">
           <!-- Header info -->
           <div class="min-w-0 flex-1">
-            <h3 class="font-bold text-base leading-none truncate pr-1" {title}>
+            <h3
+              class="font-bold text-base leading-normal truncate pr-1"
+              {title}
+            >
               {title}
             </h3>
 
-            <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+            <div class="flex items-center gap-2 mt-1 flex-wrap">
               {#if badges}
                 {@render badges()}
               {/if}
@@ -216,7 +219,7 @@
         </div>
 
         {#if description}
-          <div class="mt-2.5">
+          <div class="mt-1">
             {@render description()}
           </div>
         {/if}

@@ -23,10 +23,10 @@
 		{@render children?.()}
 	</ScrollAreaPrimitive.Viewport>
 	{#if orientation === "vertical" || orientation === "both"}
-		<Scrollbar orientation="vertical" class={scrollbarYClasses} />
+		<Scrollbar orientation="vertical" class={cn(scrollbarYClasses, "data-[state=hidden]:animate-none data-[state=hidden]:opacity-100")} />
 	{/if}
 	{#if orientation === "horizontal" || orientation === "both"}
-		<Scrollbar orientation="horizontal" class={scrollbarXClasses} />
+		<Scrollbar orientation="horizontal" class={cn(scrollbarXClasses, "data-[state=hidden]:animate-none data-[state=hidden]:opacity-100")} />
 	{/if}
 	<ScrollAreaPrimitive.Corner />
 </ScrollAreaPrimitive.Root>

@@ -59,9 +59,9 @@
   let activeTab = $state<VaultTab>(ui.vaultTab);
   let searchQuery = $state("");
   let showFavoritesOnly = $state(false);
-  let selectedTags = $state<string[]>([]);
-  let filterLogic = $state<"AND" | "OR">("OR");
-  let showTagManager = $state(false);
+let selectedTags = $state<string[]>([]);
+let filterLogic = $state<"AND" | "OR">("OR");
+let showTagManager = $state(false);
 
   // Modal States
   let showCharForm = $state(false);
@@ -433,17 +433,13 @@
     {/each}
 
     <div class="flex items-center gap-2">
-      <div class="relative flex-1">
-        <SearchIcon
-          class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
-        />
-        <Input
-          type="text"
-          bind:value={searchQuery}
-          placeholder={`Search ${activeTab}...`}
-          class="pl-9 bg-muted/40"
-        />
-      </div>
+      <Input
+        type="text"
+        bind:value={searchQuery}
+        placeholder={`Search ${activeTab}...`}
+        class="flex-1 bg-muted/40"
+        leftIcon={SearchIcon}
+      />
 
       <div class="flex items-center gap-2 shrink-0">
         <TagFilter
@@ -595,5 +591,8 @@
 
 <!-- Tag Manager Modal -->
 {#if showTagManager}
-  <TagManager onClose={() => (showTagManager = false)} />
+  <TagManager
+    open={showTagManager}
+    onOpenChange={(v) => (showTagManager = v)}
+  />
 {/if}

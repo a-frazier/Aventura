@@ -64,7 +64,7 @@
       </Button>
     {/snippet}
   </Popover.Trigger>
-  <Popover.Content class="w-[280px] p-0" align="end">
+  <Popover.Content class="w-70 p-0" align="end">
     <!-- Logic Toggle Header -->
     <div class="flex items-center justify-between border-b px-3 py-2">
       <span class="text-xs font-medium text-muted-foreground"

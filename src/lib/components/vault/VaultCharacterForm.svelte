@@ -124,15 +124,13 @@
   }}
 >
   <ResponsiveModal.Content
-    class="md:max-w-[600px] flex flex-col md:h-auto md:max-h-[90vh]"
+    class="md:max-w-150 flex flex-col md:h-auto md:max-h-[90vh]"
   >
-    <ResponsiveModal.Header>
-      <ResponsiveModal.Title class="text-center sm:text-left w-full"
-        >{isEditing ? "Edit Character" : "New Character"}</ResponsiveModal.Title
-      >
-    </ResponsiveModal.Header>
+    <ResponsiveModal.Header
+      title={isEditing ? "Edit Character" : "New Character"}
+    />
 
-    <div class="flex-1 overflow-y-auto px-4">
+    <div class="flex-1 overflow-y-auto px-4 sm:pr-4">
       <form
         id="character-form"
         onsubmit={(e) => {
@@ -276,7 +274,7 @@
         class="w-full"
       >
         {#if saving}
-          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          <Loader2 class="h-4 w-4 animate-spin" />
         {/if}
         {isEditing ? "Save Changes" : "Create Character"}
       </Button>

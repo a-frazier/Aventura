@@ -1,18 +1,22 @@
 <script lang="ts">
-  import type { VaultCharacter, VaultLorebook, VaultScenario } from "$lib/types";
+  import type {
+    VaultCharacter,
+    VaultLorebook,
+    VaultScenario,
+  } from "$lib/types";
   import { normalizeImageDataUrl } from "$lib/utils/image";
   import { Badge } from "$lib/components/ui/badge";
-  import { 
-    User, 
-    Users, 
-    Book, 
-    MapPin, 
-    MessageSquare, 
+  import {
+    User,
+    Users,
+    Book,
+    MapPin,
+    MessageSquare,
     Archive,
     Box,
     Flag,
     Brain,
-    Calendar
+    Calendar,
   } from "lucide-svelte";
   import TagBadge from "$lib/components/tags/TagBadge.svelte";
   import { tagStore } from "$lib/stores/tags.svelte";
@@ -39,13 +43,19 @@
     onDelete,
     onToggleFavorite,
     selectable = false,
-    onSelect
+    onSelect,
   }: Props = $props();
 
   // Type Guards & Casters
-  const asCharacter = $derived(type === "character" ? (item as VaultCharacter) : null);
-  const asLorebook = $derived(type === "lorebook" ? (item as VaultLorebook) : null);
-  const asScenario = $derived(type === "scenario" ? (item as VaultScenario) : null);
+  const asCharacter = $derived(
+    type === "character" ? (item as VaultCharacter) : null,
+  );
+  const asLorebook = $derived(
+    type === "lorebook" ? (item as VaultLorebook) : null,
+  );
+  const asScenario = $derived(
+    type === "scenario" ? (item as VaultScenario) : null,
+  );
 
   let isImporting = $derived(item.metadata?.importing === true);
 
@@ -88,16 +98,22 @@
           class="h-32 w-24 rounded-md object-cover ring-1 ring-border"
         />
       {:else}
-        <div class="flex h-32 w-24 items-center justify-center rounded-md bg-muted">
+        <div
+          class="flex h-32 w-24 items-center justify-center rounded-md bg-muted"
+        >
           <User class="h-10 w-10 text-muted-foreground" />
         </div>
       {/if}
     {:else if asLorebook}
-      <div class="flex h-24 w-24 items-center justify-center rounded-md bg-muted ring-1 ring-border/50">
+      <div
+        class="flex h-24 w-24 items-center justify-center rounded-md bg-muted ring-1 ring-border/50"
+      >
         <Book class="h-10 w-10 text-muted-foreground/50" />
       </div>
     {:else if asScenario}
-      <div class="flex h-24 w-24 items-center justify-center rounded-md bg-muted ring-1 ring-border/50">
+      <div
+        class="flex h-24 w-24 items-center justify-center rounded-md bg-muted ring-1 ring-border/50"
+      >
         <MapPin class="h-10 w-10 text-muted-foreground/50" />
       </div>
     {/if}
@@ -108,9 +124,9 @@
       <span class="text-[10px] text-muted-foreground font-medium">
         {asLorebook.entries.length} entries
       </span>
-      {#if asLorebook.source === 'story' || asLorebook.source === 'import'}
+      {#if asLorebook.source === "story" || asLorebook.source === "import"}
         <Badge variant="secondary" class="text-[10px] px-1.5 h-4 font-normal">
-          {asLorebook.source === 'story' ? 'Story' : 'Imported'}
+          {asLorebook.source === "story" ? "Story" : "Imported"}
         </Badge>
       {/if}
     {:else if asScenario}
@@ -138,7 +154,7 @@
 
   {#snippet description()}
     {#if item.description}
-      <p class="text-xs text-muted-foreground line-clamp-3 leading-snug">
+      <p class="text-xs text-muted-foreground line-clamp-4 leading-snug">
         {item.description}
       </p>
     {/if}
@@ -168,7 +184,10 @@
         <div class="flex flex-wrap gap-1.5">
           {#each lorebookEntryCounts.slice(0, 4) as { type, count }}
             {@const Icon = entryTypeIcons[type]}
-            <div class="flex items-center gap-1 text-[10px] text-muted-foreground/80 bg-muted/50 px-1.5 py-0.5 rounded-sm border border-border/50" title={type}>
+            <div
+              class="flex items-center gap-1 text-[10px] text-muted-foreground/80 bg-muted/50 px-1.5 py-0.5 rounded-sm border border-border/50"
+              title={type}
+            >
               {#if Icon}
                 <Icon class="h-3 w-3 opacity-70" />
               {/if}
