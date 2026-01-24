@@ -1853,6 +1853,7 @@ class SettingsStore {
       ...profile,
       id: crypto.randomUUID(),
       createdAt: Date.now(),
+      jsonSupport: profile.jsonSupport ?? 'none', // Default to 'none' for safety
     };
     this.apiSettings.profiles = [...this.apiSettings.profiles, newProfile];
     await this.saveProfiles();
@@ -1866,6 +1867,8 @@ class SettingsStore {
     this.apiSettings.profiles[index] = {
       ...this.apiSettings.profiles[index],
       ...updates,
+      // Ensure jsonSupport has a default value if not provided
+      jsonSupport: updates.jsonSupport ?? this.apiSettings.profiles[index].jsonSupport ?? 'none',
     };
     this.apiSettings.profiles = [...this.apiSettings.profiles];
     await this.saveProfiles();

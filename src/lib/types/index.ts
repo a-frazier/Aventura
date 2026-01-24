@@ -280,27 +280,27 @@ export interface VaultScenario {
   id: string;
   name: string;
   description: string | null;  // Summary/preview of the scenario
-  
+
   // Core content (from CardImportResult)
   settingSeed: string;
   npcs: VaultScenarioNpc[];
   primaryCharacterName: string;
-  
+
   // Opening scene data
   firstMessage: string | null;
   alternateGreetings: string[];
-  
+
   // Organization
   tags: string[];
   favorite: boolean;
-  
+
   // Provenance
   source: VaultScenarioSource;
   originalFilename: string | null;
-  
+
   // Metadata
   metadata: VaultScenarioMetadata | null;
-  
+
   createdAt: number;
   updatedAt: number;
 }
@@ -637,7 +637,11 @@ export interface APIProfile {
   customModels: string[];     // Manually added models
   fetchedModels: string[];    // Auto-fetched from /models endpoint
   createdAt: number;          // Timestamp
+  jsonSupport?: JSONSupportLevel; // JSON structured output support level
 }
+
+// JSON support level for structured output
+export type JSONSupportLevel = 'none' | 'json_object' | 'json_schema';
 
 // API Settings
 export interface APISettings {
@@ -850,5 +854,4 @@ export interface VaultTag {
   color: string;
   createdAt: number;
 }
-
 
