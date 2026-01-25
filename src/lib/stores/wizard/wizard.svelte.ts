@@ -324,7 +324,8 @@ export class WizardStore {
         tense: this.narrative.selectedTense,
         tone: this.narrative.tone,
         visualProseMode: this.narrative.visualProseMode,
-        inlineImageMode: this.narrative.inlineImageMode,
+        inlineImageMode: this.narrative.imageGenerationMode === "inline",
+        imageGenerationMode: this.narrative.imageGenerationMode,
       },
       title: this.narrative.storyTitle,
       openingGuidance:

@@ -262,12 +262,12 @@
           selectedTense={wizard.narrative.selectedTense}
           tone={wizard.narrative.tone}
           visualProseMode={wizard.narrative.visualProseMode}
-          inlineImageMode={wizard.narrative.inlineImageMode}
           onPOVChange={(v) => (wizard.narrative.selectedPOV = v)}
           onTenseChange={(v) => (wizard.narrative.selectedTense = v)}
           onToneChange={(v) => (wizard.narrative.tone = v)}
           onVisualProseModeChange={(v) => (wizard.narrative.visualProseMode = v)}
-          onInlineImageModeChange={(v) => (wizard.narrative.inlineImageMode = v)}
+          imageGenerationMode={wizard.narrative.imageGenerationMode}
+          onImageGenerationModeChange={(v) => (wizard.narrative.imageGenerationMode = v)}
         />
       {:else if wizard.currentStep === 8}
         <Step8Opening

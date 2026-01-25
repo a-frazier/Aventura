@@ -29,8 +29,8 @@ export class NarrativeStore {
   selectedTense = $state<Tense>("present");
   tone = $state("immersive and engaging");
   visualProseMode = $state(false);
-  inlineImageMode = $state(false);
-
+  imageGenerationMode = $state<"none" | "auto" | "inline">("auto");
+  
   // Step 9: Opening
   storyTitle = $state("");
   openingGuidance = $state("");
@@ -59,19 +59,19 @@ export class NarrativeStore {
 
   constructor() {
     // Update default POV and tense when mode changes
-    $effect(() => {
-      if (this.selectedMode === "creative-writing") {
-        if (this.selectedPOV === "first" || this.selectedPOV === "second") {
-          this.selectedTense = "past";
-        } else {
-          this.selectedPOV = "third";
-          this.selectedTense = "past";
-        }
-      } else {
-        this.selectedPOV = "first";
-        this.selectedTense = "present";
-      }
-    });
+    // $effect(() => {
+    //   if (this.selectedMode === "creative-writing") {
+    //     if (this.selectedPOV === "first" || this.selectedPOV === "second") {
+    //       this.selectedTense = "past";
+    //     } else {
+    //       this.selectedPOV = "third";
+    //       this.selectedTense = "past";
+    //     }
+    //   } else {
+    //     this.selectedPOV = "first";
+    //     this.selectedTense = "present";
+    //   }
+    // });
   }
 
   // Lorebook Actions

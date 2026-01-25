@@ -1,24 +1,24 @@
 <script lang="ts">
-  import {
-    Sparkles,
-    ImageIcon,
-  } from "lucide-svelte";
-  import type { POV, Tense, POVOption } from "../wizardTypes";
-  import { tonePresets, tenseOptions } from "../wizardTypes";
+  import * as RadioGroup from "$lib/components/ui/radio-group";
+  import { Button } from "$lib/components/ui/button";
+  import { Label } from "$lib/components/ui/label";
+  import { Input } from "$lib/components/ui/input";
+  import { Switch } from "$lib/components/ui/switch";
+  import { ScrollArea } from "$lib/components/ui/scroll-area";
+  import { BookOpen, User, Eye } from "lucide-svelte";
+  import type { POV, Tense } from "$lib/types";
 
   interface Props {
     selectedPOV: POV;
     selectedTense: Tense;
     tone: string;
     visualProseMode: boolean;
-    inlineImageMode: boolean;
-    
-    // Handlers
-    onPOVChange: (pov: POV) => void;
-    onTenseChange: (tense: Tense) => void;
-    onToneChange: (tone: string) => void;
-    onVisualProseModeChange: (enabled: boolean) => void;
-    onInlineImageModeChange: (enabled: boolean) => void;
+    imageGenerationMode: "none" | "auto" | "inline";
+    onPOVChange: (v: POV) => void;
+    onTenseChange: (v: Tense) => void;
+    onToneChange: (v: string) => void;
+    onVisualProseModeChange: (v: boolean) => void;
+    onImageGenerationModeChange: (v: "none" | "auto" | "inline") => void;
   }
 
   let {
@@ -26,183 +26,202 @@
     selectedTense,
     tone,
     visualProseMode,
-    inlineImageMode,
+    imageGenerationMode,
     onPOVChange,
     onTenseChange,
     onToneChange,
     onVisualProseModeChange,
-    onInlineImageModeChange,
+    onImageGenerationModeChange,
   }: Props = $props();
-
-  // POV options
-  const povOptions: POVOption[] = [
-    {
-      id: "first",
-      label: "1st Person",
-      example: "I walk into the room...",
-    },
-    {
-      id: "second",
-      label: "2nd Person",
-      example: "You walk into the room...",
-    },
-    {
-      id: "third",
-      label: "3rd Person",
-      example: "They walk into the room...",
-    },
-  ];
 </script>
 
-<div class="space-y-4">
-  <p class="text-surface-400">
-    Customize how your story will be written.
-  </p>
-
-  <!-- POV Selection -->
-  <div>
-    <label class="mb-2 block text-sm font-medium text-surface-300"
-      >Point of View</label
-    >
-    <div class="grid gap-2 grid-cols-3">
-      {#each povOptions as option}
-        <button
-          class="card p-3 text-center transition-all"
-          class:ring-2={selectedPOV === option.id}
-          class:ring-accent-500={selectedPOV === option.id}
-          onclick={() => onPOVChange(option.id)}
-        >
-          <span class="block font-medium text-surface-100"
-            >{option.label}</span
-          >
-          <span class="text-xs text-surface-400">{option.example}</span>
-        </button>
-      {/each}
+<div class="flex h-full flex-col gap-4 p-1">
+  <div class="flex items-center justify-between">
+    <div>
+      <h3 class="text-lg font-bold tracking-tight">Writing Style</h3>
+      <p class="text-muted-foreground">
+        Choose a narrative voice and configure the AI's writing style.
+      </p>
     </div>
   </div>
 
-  <!-- Tense Selection -->
-  <div>
-    <label class="mb-2 block text-sm font-medium text-surface-300"
-      >Tense</label
-    >
-    <div class="grid grid-cols-2 gap-2">
-      {#each tenseOptions as option}
-        <button
-          class="card p-3 text-center transition-all"
-          class:ring-2={selectedTense === option.id}
-          class:ring-accent-500={selectedTense === option.id}
-          onclick={() => onTenseChange(option.id)}
-        >
-          <span class="block font-medium text-surface-100"
-            >{option.label}</span
+  <ScrollArea class="h-full pr-4">
+    <div class="space-y-4">
+      <!-- Narrative Config -->
+      <section class="grid gap-8 md:grid-cols-2">
+        <!-- Perspective -->
+        <div class="space-y-1">
+          <Label class="flex items-center gap-2 text-base font-semibold">
+            <User class="h-4 w-4" />
+            Perspective
+          </Label>
+          <RadioGroup.Root
+            value={selectedPOV}
+            onValueChange={(v) => onPOVChange(v as POV)}
+            class="grid grid-cols-3 gap-2"
           >
-          <span class="text-xs text-surface-400">{option.example}</span>
-        </button>
-      {/each}
-    </div>
-  </div>
-
-  <!-- Tone Selection -->
-  <div>
-    <label class="mb-2 block text-sm font-medium text-surface-300"
-      >Tone</label
-    >
-    <div class="flex flex-wrap gap-2 mb-2">
-      {#each tonePresets as preset}
-        <button
-          class="px-3 py-1 rounded-full text-sm transition-colors"
-          class:bg-accent-500={tone === preset}
-          class:text-white={tone === preset}
-          class:bg-surface-700={tone !== preset}
-          class:text-surface-300={tone !== preset}
-          class:hover:bg-surface-600={tone !== preset}
-          onclick={() => onToneChange(preset)}
-        >
-          {preset}
-        </button>
-      {/each}
-    </div>
-    <input
-      type="text"
-      value={tone}
-      oninput={(e) => onToneChange(e.currentTarget.value)}
-      placeholder="Or describe your own tone..."
-      class="input"
-    />
-  </div>
-
-  <!-- Visual Prose Mode Toggle -->
-  <div class="card bg-surface-800/50 p-4">
-    <div class="flex items-start gap-3">
-      <div class="rounded-full bg-surface-700 p-2">
-        <Sparkles class="h-5 w-5 text-accent-400" />
-      </div>
-      <div class="flex-1">
-        <div class="flex items-center justify-between">
-          <div class="text-sm font-medium text-surface-200">
-            Visual Prose Mode
-          </div>
-          <button
-            type="button"
-            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface-800"
-            class:bg-accent-600={visualProseMode}
-            class:bg-surface-600={!visualProseMode}
-            onclick={() => onVisualProseModeChange(!visualProseMode)}
-            role="switch"
-            aria-checked={visualProseMode}
-            aria-label="Toggle Visual Prose Mode"
-          >
-            <span
-              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-              class:translate-x-5={visualProseMode}
-              class:translate-x-0={!visualProseMode}
-            ></span>
-          </button>
+            {#each ["first", "second", "third"] as pov}
+              <Label
+                for={`pov-${pov}`}
+                class="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 text-center"
+              >
+                <RadioGroup.Item
+                  value={pov}
+                  id={`pov-${pov}`}
+                  class="sr-only"
+                />
+                <span class="font-medium capitalize">{pov}</span>
+              </Label>
+            {/each}
+          </RadioGroup.Root>
+          <p class="text-xs text-muted-foreground h-4">
+            {#if selectedPOV === "first"}
+              "I draw my sword..."
+            {:else if selectedPOV === "second"}
+              "You draw your sword..."
+            {:else}
+              "He/She/They draw their sword..."
+            {/if}
+          </p>
         </div>
-        <p class="mt-1 text-xs text-surface-400">
-          Enable rich HTML/CSS visual output. The AI can create styled
-          layouts, dialogue boxes, and atmospheric effects. Best for
-          immersive, cinematic storytelling.
-        </p>
-      </div>
-    </div>
-  </div>
 
-  <!-- Inline Image Mode Toggle -->
-  <div class="card bg-surface-800/50 p-4">
-    <div class="flex items-start gap-3">
-      <div class="rounded-full bg-surface-700 p-2">
-        <ImageIcon class="h-5 w-5 text-blue-400" />
-      </div>
-      <div class="flex-1">
-        <div class="flex items-center justify-between">
-          <div class="text-sm font-medium text-surface-200">
-            Inline Image Mode
-          </div>
-          <button
-            type="button"
-            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 focus:ring-offset-surface-800"
-            class:bg-accent-600={inlineImageMode}
-            class:bg-surface-600={!inlineImageMode}
-            onclick={() => onInlineImageModeChange(!inlineImageMode)}
-            role="switch"
-            aria-checked={inlineImageMode}
-            aria-label="Toggle Inline Image Mode"
+        <!-- Tense -->
+        <div class="space-y-1">
+          <Label class="flex items-center gap-2 text-base font-semibold">
+            <BookOpen class="h-4 w-4" />
+            Tense
+          </Label>
+          <RadioGroup.Root
+            value={selectedTense}
+            onValueChange={(v) => onTenseChange(v as Tense)}
+            class="grid grid-cols-2 gap-2"
           >
-            <span
-              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-              class:translate-x-5={inlineImageMode}
-              class:translate-x-0={!inlineImageMode}
-            ></span>
-          </button>
+            {#each ["present", "past"] as tense}
+              <Label
+                for={`tense-${tense}`}
+                class="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5 text-center"
+              >
+                <RadioGroup.Item
+                  value={tense}
+                  id={`tense-${tense}`}
+                  class="sr-only"
+                />
+                <span class="font-medium capitalize">{tense}</span>
+              </Label>
+            {/each}
+          </RadioGroup.Root>
+          <p class="text-xs text-muted-foreground h-4">
+            {#if selectedTense === "present"}
+              Action happens now.
+            {:else}
+              Action happened in the past.
+            {/if}
+          </p>
         </div>
-        <p class="mt-1 text-xs text-surface-400">
-          AI places image tags directly in the narrative. Images are
-          generated inline where the AI decides they fit best. Requires
-          image generation to be configured.
-        </p>
-      </div>
+      </section>
+
+      <!-- Tone -->
+      <section class="space-y-2 pt-1">
+        <div class="grid w-full items-center gap-2">
+          <Input
+            label="Narrative Tone"
+            id="tone"
+            value={tone}
+            oninput={(e) => onToneChange(e.currentTarget.value)}
+            placeholder="e.g. Dark and gritty, Whimsical, Clinical"
+          />
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {#each ["Dark Fantasy", "High Adventure", "Cozy", "Horror", "Cyberpunk", "Mystery"] as t}
+            <Button
+              variant="outline"
+              size="sm"
+              class="h-7 text-xs"
+              onclick={() => onToneChange(t)}
+            >
+              {t}
+            </Button>
+          {/each}
+        </div>
+      </section>
+
+      <!-- Visuals Configuration -->
+      <section class="space-y-2 pt-1">
+        <Label class="flex items-center gap-2 text-base font-semibold">
+          <Eye class="h-4 w-4" />
+          Visual Experience
+        </Label>
+
+        <RadioGroup.Root
+          value={imageGenerationMode}
+          onValueChange={(v) =>
+            onImageGenerationModeChange(v as "none" | "auto" | "inline")}
+          class="grid grid-cols-1 gap-4 md:grid-cols-3"
+        >
+          <!-- No Images -->
+          <div class="relative">
+            <Label
+              for="img-none"
+              class="flex h-full cursor-pointer flex-col justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
+            >
+              <div class="flex items-start justify-between w-full mb-2">
+                <span class="font-semibold">Text Only</span>
+                <RadioGroup.Item value="none" id="img-none" class="sr-only" />
+              </div>
+              <div class="text-xs text-muted-foreground font-normal">
+                Pure text adventure. No images will be generated.
+              </div>
+            </Label>
+          </div>
+
+          <!-- Agent Mode -->
+          <div class="relative">
+            <Label
+              for="img-auto"
+              class="flex h-full cursor-pointer flex-col justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
+            >
+              <div class="flex items-start justify-between w-full mb-2">
+                <span class="font-semibold">Agent Mode</span>
+                <RadioGroup.Item value="auto" id="img-auto" class="sr-only" />
+              </div>
+              <div class="text-xs text-muted-foreground font-normal">
+                AI decides when to generate images based on the story.
+              </div>
+            </Label>
+          </div>
+
+          <!-- Inline Mode -->
+          <div class="relative">
+            <Label
+              for="img-inline"
+              class="flex h-full cursor-pointer flex-col justify-between rounded-xl border-2 border-muted bg-popover p-4 hover:bg-accent has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/5"
+            >
+              <div class="flex items-start justify-between w-full mb-2">
+                <span class="font-semibold">Inline Mode</span>
+                <RadioGroup.Item value="inline" id="img-inline" class="sr-only" />
+              </div>
+              <div class="text-xs text-muted-foreground font-normal">
+                Images are embedded directly in the text flow.
+              </div>
+            </Label>
+          </div>
+        </RadioGroup.Root>
+
+        <div class="flex items-center space-x-2 py-4">
+          <Switch
+            id="visual-prose"
+            checked={visualProseMode}
+            onCheckedChange={onVisualProseModeChange}
+          />
+          <div class="grid gap-1.5 leading-none">
+            <Label for="visual-prose">Visual Prose Styling</Label>
+            <p class="text-xs text-muted-foreground">
+              Enable rich text formatting (colors, fonts) for dialogue and
+              actions.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
-  </div>
+  </ScrollArea>
 </div>

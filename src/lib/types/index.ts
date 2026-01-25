@@ -1,5 +1,4 @@
 // Core entity types for Aventura
-
 export type StoryMode = 'adventure' | 'creative-writing';
 export type POV = 'first' | 'second' | 'third';
 export type Tense = 'past' | 'present';
@@ -101,6 +100,7 @@ export interface StorySettings {
   themes?: string[];
   visualProseMode?: boolean;  // Enable HTML/CSS visual output mode
   inlineImageMode?: boolean;  // Enable <pic> tag inline image generation
+  imageGenerationMode?: 'none' | 'auto' | 'inline'; // Image generation strategy
 }
 
 export interface StoryEntry {
@@ -268,27 +268,27 @@ export interface VaultScenario {
   id: string;
   name: string;
   description: string | null;  // Summary/preview of the scenario
-  
+
   // Core content (from CardImportResult)
   settingSeed: string;
   npcs: VaultScenarioNpc[];
   primaryCharacterName: string;
-  
+
   // Opening scene data
   firstMessage: string | null;
   alternateGreetings: string[];
-  
+
   // Organization
   tags: string[];
   favorite: boolean;
-  
+
   // Provenance
   source: VaultScenarioSource;
   originalFilename: string | null;
-  
+
   // Metadata
   metadata: VaultScenarioMetadata | null;
-  
+
   createdAt: number;
   updatedAt: number;
 }
