@@ -9,11 +9,13 @@
  */
 
 import type { Entry, EntryType, StoryEntry, Character, Location, Item, GenerationPreset } from '$lib/types';
-import type { OpenAIProvider as OpenAIProvider } from './openrouter';
-import { settings } from '$lib/stores/settings.svelte';
-import { buildExtraBody } from './requestOverrides';
+import type {OpenAIProvider as OpenAIProvider} from './openrouter';
+import {settings} from '$lib/stores/settings.svelte';
+import {buildExtraBody} from './requestOverrides';
 import { promptService, type PromptContext } from '$lib/services/prompts';
-import { tryParseJsonWithHealing } from './jsonHealing';
+import {tryParseJsonWithHealing} from './jsonHealing';
+import {getJsonSupportLevel} from './jsonSupport';
+import {buildResponseFormat, maybeInjectJsonInstructions} from './jsonInstructions';
 
 /**
  * Live world state - the actively tracked entities that should always be Tier 1
@@ -147,7 +149,6 @@ export class EntryRetrievalService {
       providerOnly: this.preset.providerOnly,
     });
   }
-
   /**
    * Retrieve relevant entries using tiered injection.
    *
@@ -590,14 +591,19 @@ export class EntryRetrievalService {
       entrySummaries: entryList,
     });
 
+    const jsonSupport = getJsonSupportLevel(this.presetId);
+    const responseFormat = buildResponseFormat('tier3-entry-selection', jsonSupport);
+    const finalPrompt = maybeInjectJsonInstructions(prompt, 'tier3-entry-selection', jsonSupport);
+
     try {
       const response = await this.provider.generateResponse({
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: finalPrompt }],
         model: this.preset.model,
         temperature: this.preset.temperature,
         maxTokens: 8192,
         extraBody: this.extraBody,
         signal,
+        responseFormat, // Use responseFormat for structured output
       });
 
       log('LLM selection response:', response.content);

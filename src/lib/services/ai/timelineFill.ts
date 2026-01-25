@@ -1,9 +1,11 @@
-import type { OpenAIProvider as OpenAIProvider } from './openrouter';
+import type {OpenAIProvider as OpenAIProvider} from './openrouter';
 import type { Chapter, StoryEntry, TimeTracker, Location, GenerationPreset } from '$lib/types';
-import { settings } from '$lib/stores/settings.svelte';
-import { buildExtraBody } from './requestOverrides';
+import {settings} from '$lib/stores/settings.svelte';
+import {buildExtraBody} from './requestOverrides';
 import { promptService, type PromptContext, type StoryMode, type POV, type Tense } from '$lib/services/prompts';
-import { tryParseJsonWithHealing } from './jsonHealing';
+import {tryParseJsonWithHealing} from './jsonHealing';
+import {getJsonSupportLevel} from './jsonSupport';
+import {buildResponseFormat, maybeInjectJsonInstructions} from './jsonInstructions';
 
 // Format time tracker for timeline display (always shows full format)
 function formatTime(time: TimeTracker | null): string {
@@ -209,17 +211,22 @@ export class TimelineFillService {
       timeline: JSON.stringify(timeline, null, 2),
     });
 
+    const jsonSupportLevel = getJsonSupportLevel(this.presetId);
+    const responseFormat = buildResponseFormat('timeline-fill', jsonSupportLevel);
+    const finalPrompt = maybeInjectJsonInstructions(prompt, 'timeline-fill', jsonSupportLevel);
+
     try {
       const response = await this.provider.generateResponse({
         model: this.model,
         messages: [
           { role: 'system', content: promptService.renderPrompt('timeline-fill', promptContext) },
-          { role: 'user', content: prompt },
+          { role: 'user', content: finalPrompt },
         ],
         temperature: this.temperature,
         maxTokens: 8192,
         extraBody: this.extraBody,
         signal,
+        responseFormat, // Use responseFormat for structured output
       });
 
       return this.parseQueriesResponse(response.content, chapters);
@@ -403,17 +410,22 @@ export class TimelineFillService {
       query: query.query,
     });
 
+    const jsonSupportLevel = getJsonSupportLevel(this.presetId);
+    const responseFormat = buildResponseFormat('timeline-fill-answer', jsonSupportLevel);
+    const finalPrompt = maybeInjectJsonInstructions(prompt, 'timeline-fill-answer', jsonSupportLevel);
+
     try {
       const response = await this.provider.generateResponse({
         model: this.model,
         messages: [
           { role: 'system', content: promptService.renderPrompt('timeline-fill-answer', promptContext) },
-          { role: 'user', content: prompt },
+          { role: 'user', content: finalPrompt },
         ],
         temperature: 0.2,
         maxTokens: 8192,
         extraBody: this.extraBody,
         signal,
+        responseFormat, // Use responseFormat for structured output
       });
 
       return {

@@ -1,9 +1,11 @@
-import type { OpenAIProvider as OpenAIProvider } from './openrouter';
+import type {OpenAIProvider as OpenAIProvider} from './openrouter';
 import type { StoryEntry, StoryBeat, Entry, GenerationPreset } from '$lib/types';
-import { settings } from '$lib/stores/settings.svelte';
-import { buildExtraBody } from './requestOverrides';
+import {settings} from '$lib/stores/settings.svelte';
+import {buildExtraBody} from './requestOverrides';
 import { promptService, type PromptContext, type StoryMode, type POV, type Tense } from '$lib/services/prompts';
-import { tryParseJsonWithHealing } from './jsonHealing';
+import {tryParseJsonWithHealing} from './jsonHealing';
+import {getJsonSupportLevel} from './jsonSupport';
+import {buildResponseFormat, maybeInjectJsonInstructions} from './jsonInstructions';
 
 const DEBUG = true;
 
@@ -118,16 +120,21 @@ export class SuggestionsService {
       lorebookContext,
     });
 
+    const jsonSupportLevel = getJsonSupportLevel(this.presetId);
+    const responseFormat = buildResponseFormat('suggestions', jsonSupportLevel);
+    const finalPrompt = maybeInjectJsonInstructions(prompt, 'suggestions', jsonSupportLevel);
+
     try {
       const response = await this.provider.generateResponse({
         model: this.model,
         messages: [
           { role: 'system', content: promptService.renderPrompt('suggestions', promptContext) },
-          { role: 'user', content: prompt },
+          { role: 'user', content: finalPrompt },
         ],
         temperature: this.temperature,
         maxTokens: this.maxTokens,
         extraBody: this.extraBody,
+        responseFormat, // Use responseFormat for structured output
       });
 
       const result = this.parseSuggestions(response.content);

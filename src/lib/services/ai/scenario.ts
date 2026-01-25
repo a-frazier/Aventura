@@ -6,6 +6,8 @@ import type { Message } from './types';
 import type { StoryMode, POV, Character, Location, Item } from '$lib/types';
 import { promptService, type PromptContext } from '$lib/services/prompts';
 import { tryParseJsonWithHealing } from './jsonHealing';
+import {getJsonSupportLevel} from './jsonSupport';
+import {buildResponseFormat, maybeInjectJsonInstructions} from './jsonInstructions';
 
 const DEBUG = true;
 
@@ -321,20 +323,20 @@ class ScenarioService {
 
     const lorebookContext = this.buildSettingLorebookContext(lorebookEntries);
 
+    const userPrompt = promptService.renderUserPrompt('setting-expansion', promptContext, {
+      genreLabel,
+      seed,
+      lorebookContext,
+      customInstruction: customInstructionBlock,
+    });
+
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('setting-expansion', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'setting-expansion', jsonSupport);
+
     const messages: Message[] = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: promptService.renderUserPrompt('setting-expansion', promptContext, {
-          genreLabel,
-          seed,
-          lorebookContext,
-          customInstruction: customInstructionBlock,
-        })
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: finalUserPrompt }
     ];
 
     const response = await provider.generateResponse({
@@ -343,6 +345,7 @@ class ScenarioService {
       temperature: presetConfig.temperature ?? 0.3,
       maxTokens: presetConfig.maxTokens ?? 8192,
       extraBody: this.buildProcessExtraBody(presetConfig, SCENARIO_PROVIDER, 'off'),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Setting expansion response received', { length: response.content.length });
@@ -407,20 +410,20 @@ class ScenarioService {
 
     const lorebookContext = this.buildSettingLorebookContext(lorebookEntries);
 
+    const userPrompt = promptService.renderUserPrompt('setting-refinement', promptContext, {
+      genreLabel,
+      currentSetting: currentSettingBlock,
+      lorebookContext,
+      customInstruction: customInstructionBlock,
+    });
+
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('setting-refinement', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'setting-refinement', jsonSupport);
+
     const messages: Message[] = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: promptService.renderUserPrompt('setting-refinement', promptContext, {
-          genreLabel,
-          currentSetting: currentSettingBlock,
-          lorebookContext,
-          customInstruction: customInstructionBlock,
-        })
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: finalUserPrompt }
     ];
 
     const model = presetConfig.model;
@@ -431,6 +434,7 @@ class ScenarioService {
       temperature: presetConfig.temperature ?? 0.3,
       maxTokens: presetConfig.maxTokens ?? 8192,
       extraBody: this.buildProcessExtraBody(presetConfig, SCENARIO_PROVIDER, 'off'),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Setting refinement response received', { length: response.content.length });
@@ -493,22 +497,22 @@ class ScenarioService {
     const characterBackground = characterBackgroundParts.join('\n');
     const settingContext = setting ? `SETTING: ${setting.name}\n${setting.description}` : '';
 
+    const userPrompt = promptService.renderUserPrompt('character-elaboration', promptContext, {
+      genreLabel,
+      characterName,
+      characterDescription,
+      characterBackground,
+      settingContext,
+      customInstruction: customInstructionBlock,
+    });
+
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('protagonist-elaboration', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'protagonist-elaboration', jsonSupport);
+
     const messages: Message[] = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: promptService.renderUserPrompt('character-elaboration', promptContext, {
-          genreLabel,
-          characterName,
-          characterDescription,
-          characterBackground,
-          settingContext,
-          customInstruction: customInstructionBlock,
-        })
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: finalUserPrompt }
     ];
 
     const model = presetConfig.model;
@@ -519,6 +523,7 @@ class ScenarioService {
       temperature: presetConfig.temperature ?? 0.3,
       maxTokens: presetConfig.maxTokens ?? 8192,
       extraBody: this.buildProcessExtraBody(presetConfig, SCENARIO_PROVIDER, 'off'),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Character elaboration response received', { length: response.content.length });
@@ -582,20 +587,20 @@ class ScenarioService {
 
     const settingContext = setting ? `SETTING: ${setting.name}\n${setting.description}` : '';
 
+    const userPrompt = promptService.renderUserPrompt('character-refinement', promptContext, {
+      genreLabel,
+      currentCharacter: currentCharacterBlock,
+      settingContext,
+      customInstruction: customInstructionBlock,
+    });
+
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('protagonist-elaboration', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'protagonist-elaboration', jsonSupport);
+
     const messages: Message[] = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: promptService.renderUserPrompt('character-refinement', promptContext, {
-          genreLabel,
-          currentCharacter: currentCharacterBlock,
-          settingContext,
-          customInstruction: customInstructionBlock,
-        })
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: finalUserPrompt }
     ];
 
     const model = presetConfig.model;
@@ -606,6 +611,7 @@ class ScenarioService {
       temperature: presetConfig.temperature ?? 0.3,
       maxTokens: presetConfig.maxTokens ?? 8192,
       extraBody: this.buildProcessExtraBody(presetConfig, SCENARIO_PROVIDER, 'off'),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Character refinement response received', { length: response.content.length });
@@ -652,20 +658,20 @@ class ScenarioService {
     const povInstruction = `${povContext}\n${modeContext}`;
     const settingDescription = `${setting.description}\n\nATMOSPHERE: ${setting.atmosphere}\n\nTHEMES: ${setting.themes.join(', ')}`;
 
+    const userPrompt = promptService.renderUserPrompt('protagonist-generation', promptContext, {
+      genreLabel,
+      settingName: setting.name,
+      settingDescription,
+      povInstruction,
+    });
+
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('protagonist-generation', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'protagonist-generation', jsonSupport);
+
     const messages: Message[] = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: promptService.renderUserPrompt('protagonist-generation', promptContext, {
-          genreLabel,
-          settingName: setting.name,
-          settingDescription,
-          povInstruction,
-        })
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: finalUserPrompt }
     ];
 
     const model = presetConfig.model;
@@ -676,6 +682,7 @@ class ScenarioService {
       temperature: presetConfig.temperature ?? 0.3,
       maxTokens: presetConfig.maxTokens ?? 8192,
       extraBody: this.buildProcessExtraBody(presetConfig, SCENARIO_PROVIDER, 'off'),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Protagonist response received', { length: response.content.length });
@@ -714,22 +721,22 @@ class ScenarioService {
 
     const promptContext = this.getWizardPromptContext('adventure', 'second', 'present', protagonist.name);
     const systemPrompt = promptService.renderPrompt('supporting-characters', promptContext);
+    const userPrompt = promptService.renderUserPrompt('supporting-characters', promptContext, {
+      count,
+      genreLabel,
+      settingName: setting.name,
+      settingDescription: setting.description,
+      protagonistName: protagonist.name,
+      protagonistDescription: `${protagonist.description}\nMotivation: ${protagonist.motivation}`,
+    });
+
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('supporting-cast-generation', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'supporting-cast-generation', jsonSupport);
+
     const messages: Message[] = [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
-      {
-        role: 'user',
-        content: promptService.renderUserPrompt('supporting-characters', promptContext, {
-          count,
-          genreLabel,
-          settingName: setting.name,
-          settingDescription: setting.description,
-          protagonistName: protagonist.name,
-          protagonistDescription: `${protagonist.description}\nMotivation: ${protagonist.motivation}`,
-        })
-      }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: finalUserPrompt }
     ];
 
     const response = await provider.generateResponse({
@@ -738,6 +745,7 @@ class ScenarioService {
       temperature: presetConfig.temperature ?? 0.3,
       maxTokens: presetConfig.maxTokens ?? 8192,
       extraBody: this.buildProcessExtraBody(presetConfig, SCENARIO_PROVIDER, 'off'),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Characters response received', { length: response.content.length });
@@ -771,9 +779,13 @@ class ScenarioService {
     const provider = this.getProvider(presetConfig.profileId || undefined);
     const { systemPrompt, userPrompt } = this.buildOpeningPrompts(wizardData, lorebookEntries, 'json');
 
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('opening-generation', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'opening-generation', jsonSupport);
+
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: 'user', content: finalUserPrompt },
     ];
 
     const model = presetConfig.model;
@@ -790,6 +802,7 @@ class ScenarioService {
         isZAI ? { order: ['z-ai'], require_parameters: true } : SCENARIO_PROVIDER,
         'high'
       ),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Opening response received', { length: response.content.length });
@@ -841,9 +854,13 @@ class ScenarioService {
       'json'
     );
 
+    const jsonSupport = getJsonSupportLevel(presetId);
+    const responseFormat = buildResponseFormat('opening-generation', jsonSupport);
+    const finalUserPrompt = maybeInjectJsonInstructions(userPrompt, 'opening-generation', jsonSupport);
+
     const messages: Message[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
+      { role: 'user', content: finalUserPrompt },
     ];
 
     const model = presetConfig.model;
@@ -860,6 +877,7 @@ class ScenarioService {
         isZAI ? { order: ['z-ai'], require_parameters: true } : SCENARIO_PROVIDER,
         'high'
       ),
+      responseFormat, // Use responseFormat for structured output
     });
 
     log('Opening refinement response received', { length: response.content.length });

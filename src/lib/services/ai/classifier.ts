@@ -1,9 +1,11 @@
-import type { OpenAIProvider as OpenAIProvider } from './openrouter';
+import type {OpenAIProvider as OpenAIProvider} from './openrouter';
 import type { Character, Location, Item, StoryBeat, StoryEntry, TimeTracker, GenerationPreset } from '$lib/types';
-import { settings } from '$lib/stores/settings.svelte';
-import { buildExtraBody } from './requestOverrides';
+import {settings} from '$lib/stores/settings.svelte';
+import {buildExtraBody} from './requestOverrides';
 import { promptService, type PromptContext } from '$lib/services/prompts';
-import { tryParseJsonWithHealing } from './jsonHealing';
+import {tryParseJsonWithHealing} from './jsonHealing';
+import {getJsonSupportLevel} from './jsonSupport';
+import {buildResponseFormat, maybeInjectJsonInstructions} from './jsonInstructions';
 
 const DEBUG = true;
 
@@ -175,8 +177,9 @@ export class ClassifierService {
       providerOnly: this.settingsOverride?.providerOnly ?? this.preset.providerOnly,
     });
   }
-
   async classify(context: ClassificationContext): Promise<ClassificationResult> {
+    const jsonSupportLevel = getJsonSupportLevel(this.presetId);
+
     log('classify called', {
       model: this.model,
       temperature: this.temperature,
@@ -187,11 +190,15 @@ export class ClassifierService {
       existingItems: context.existingItems.length,
       chatHistoryEntries: context.chatHistory?.length ?? 0,
       currentStoryTime: context.currentStoryTime,
+      jsonSupport: jsonSupportLevel,
     });
 
     const prompt = this.buildClassificationPrompt(context);
     const promptContext = this.buildPromptContext(context);
     const systemPrompt = promptService.renderPrompt('classifier', promptContext);
+
+    const responseFormat = buildResponseFormat('classifier', jsonSupportLevel);
+    const finalPrompt = maybeInjectJsonInstructions(prompt, 'classifier', jsonSupportLevel);
 
     try {
       log('Sending classification request...');
@@ -200,11 +207,12 @@ export class ClassifierService {
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
+          { role: 'user', content: finalPrompt }
         ],
         temperature: this.temperature,
         maxTokens: this.maxTokens,
         extraBody: this.extraBody,
+        responseFormat,
       });
 
       log('Classification response received', {

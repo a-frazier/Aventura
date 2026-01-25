@@ -1,9 +1,11 @@
-import type { OpenAIProvider } from './openrouter';
+import type {OpenAIProvider} from './openrouter';
 import type { StoryEntry, GenerationPreset } from '$lib/types';
-import { settings } from '$lib/stores/settings.svelte';
-import { buildExtraBody } from './requestOverrides';
+import {settings} from '$lib/stores/settings.svelte';
+import {buildExtraBody} from './requestOverrides';
 import { promptService, type PromptContext, type StoryMode, type POV, type Tense } from '$lib/services/prompts';
-import { tryParseJsonWithHealing } from './jsonHealing';
+import {tryParseJsonWithHealing} from './jsonHealing';
+import {getJsonSupportLevel} from './jsonSupport';
+import {buildResponseFormat, maybeInjectJsonInstructions} from './jsonInstructions';
 
 const DEBUG = true;
 
@@ -108,6 +110,10 @@ export class StyleReviewerService {
       passages: combinedText,
     });
 
+    const jsonSupportLevel = getJsonSupportLevel(this.presetId);
+    const responseFormat = buildResponseFormat('style-reviewer', jsonSupportLevel);
+    const finalPrompt = maybeInjectJsonInstructions(prompt, 'style-reviewer', jsonSupportLevel);
+
     try {
       log('Sending style analysis request...');
 
@@ -115,11 +121,12 @@ export class StyleReviewerService {
         model: this.model,
         messages: [
           { role: 'system', content: promptService.renderPrompt('style-reviewer', promptContext) },
-          { role: 'user', content: prompt },
+          { role: 'user', content: finalPrompt },
         ],
         temperature: this.temperature,
         maxTokens: this.maxTokens,
         extraBody: this.extraBody,
+        responseFormat, // Use responseFormat for structured output
       });
 
       log('Style analysis response received', {
