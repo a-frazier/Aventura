@@ -9,6 +9,8 @@
     type LorebookImportResult,
   } from "$lib/services/lorebookImporter";
   import { database } from "$lib/services/database";
+  import { open } from '@tauri-apps/plugin-dialog';
+  import { readTextFile } from '@tauri-apps/plugin-fs';
   import {
     Upload,
     FileJson,
@@ -25,7 +27,6 @@
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils/cn";
 
-  let fileInput: HTMLInputElement;
   let dragOver = $state(false);
   let parseResult = $state<LorebookImportResult | null>(null);
   let useAIClassification = $state(true);
@@ -47,14 +48,6 @@
     );
   });
 
-  function handleFileSelect(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (file) {
-      processFile(file);
-    }
-  }
-
   function handleDrop(e: DragEvent) {
     e.preventDefault();
     dragOver = false;
@@ -73,18 +66,16 @@
     dragOver = false;
   }
 
-  async function processFile(file: File) {
+  async function processContent(text: string, filename: string) {
     parseResult = null;
 
-    // Check file extension (case-insensitive)
-    const fileName = file.name.toLowerCase();
+    const fileName = filename.toLowerCase();
     if (!fileName.endsWith(".json") && !fileName.endsWith(".avt")) {
       ui.showToast("Please select a JSON or Aventuras file (.json or .avt)", "error");
       return;
     }
 
     try {
-      const text = await file.text();
       const result = parseLorebook(text);
 
       if (!result.success) {
@@ -105,6 +96,37 @@
       parseResult = result;
     } catch (err) {
       ui.showToast(err instanceof Error ? err.message : "Failed to read file", "error");
+    }
+  }
+
+  async function processFile(file: File) {
+    try {
+      const text = await file.text();
+      await processContent(text, file.name);
+    } catch (err) {
+      ui.showToast(err instanceof Error ? err.message : "Failed to read file", "error");
+    }
+  }
+
+  async function handleBrowse() {
+    try {
+      const filePath = await open({
+        filters: [
+          { name: 'Aventura Lorebook', extensions: ['json', 'avt'] },
+          { name: 'JSON', extensions: ['json'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+
+      if (!filePath || typeof filePath !== 'string') {
+        return;
+      }
+
+      const content = await readTextFile(filePath);
+      const filename = filePath.split(/[/\\]/).pop() ?? 'lorebook.json';
+      await processContent(content, filename);
+    } catch (err) {
+      ui.showToast(err instanceof Error ? err.message : "Failed to open file", "error");
     }
   }
 
@@ -216,20 +238,13 @@
           ondragleave={handleDragLeave}
           role="button"
           tabindex="0"
-          onclick={() => fileInput.click()}
-          onkeydown={(e) => e.key === "Enter" && fileInput.click()}
+          onclick={handleBrowse}
+          onkeydown={(e) => e.key === "Enter" && handleBrowse()}
         >
           <FileJson class="h-12 w-12 text-muted-foreground mx-auto mb-3" />
           <p class="text-foreground mb-1">Drop a lorebook file here</p>
           <p class="text-sm text-muted-foreground">or click to browse</p>
         </div>
-        <input
-          type="file"
-          accept=".json,.avt,application/json,*/*"
-          class="hidden"
-          bind:this={fileInput}
-          onchange={handleFileSelect}
-        />
 
         <p class="text-xs text-muted-foreground text-center">
           Supports Aventuras (.avt, .json) and SillyTavern lorebook formats
