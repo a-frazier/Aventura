@@ -15,6 +15,7 @@ export class SettingStore {
   expandedSetting = $state<ExpandedSetting | null>(null);
   expandedSettingTranslated = $state<ExpandedSetting | null>(null);
   isExpandingSetting = $state(false);
+  isRefiningSetting = $state(false);
   settingError = $state<string | null>(null);
   settingElaborationGuidance = $state("");
   previousExpandedSetting = $state<ExpandedSetting | null>(null);
@@ -118,9 +119,9 @@ export class SettingStore {
     customGenre: string,
     importedEntries: ImportedEntry[] = []
   ) {
-    if (!this.expandedSetting || this.isExpandingSetting) return;
+    if (!this.expandedSetting || this.isRefiningSetting) return;
 
-    this.isExpandingSetting = true;
+    this.isRefiningSetting = true;
     this.settingError = null;
 
     try {
@@ -151,7 +152,7 @@ export class SettingStore {
       this.settingError =
         error instanceof Error ? error.message : "Failed to refine setting";
     } finally {
-      this.isExpandingSetting = false;
+      this.isRefiningSetting = false;
     }
   }
 

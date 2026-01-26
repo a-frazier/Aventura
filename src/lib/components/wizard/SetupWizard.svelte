@@ -129,6 +129,7 @@
           expandedSetting={wizard.setting.expandedSettingDisplay}
           settingElaborationGuidance={wizard.setting.settingElaborationGuidance}
           isExpandingSetting={wizard.setting.isExpandingSetting}
+          isRefiningSetting={wizard.setting.isRefiningSetting}
           settingError={wizard.setting.settingError}
           isEditingSetting={wizard.setting.isEditingSetting}
           selectedScenarioId={wizard.setting.selectedScenarioId}
@@ -153,7 +154,7 @@
           onShowVaultPickerChange={(show) => (wizard.setting.showScenarioVaultPicker = show)}
           onSelectFromVault={(s) => wizard.selectScenarioFromVault(s)}
           cardImportFileInputRef={(el) => (wizard.character.cardImportFileInput = el)}
-          scenarioCarouselRef={(el) => { /* managed locally if needed, or in store */ }} 
+          scenarioCarouselRef={(el) => { /* managed locally if needed, or in store */ }}
           onCarouselScroll={() => { /* managed locally */ }}
           onNavigateToVault={() => {
              ui.setActivePanel("vault");
@@ -173,7 +174,8 @@
           manualCharacterTraits={wizard.character.manualCharacterTraits}
           characterElaborationGuidance={wizard.character.characterElaborationGuidance}
           isGeneratingProtagonist={wizard.character.isGeneratingProtagonist}
-          isElaboratingCharacter={wizard.character.isElaboratingCharacter}
+          isExpandingCharacter={wizard.character.isExpandingCharacter}
+          isRefiningCharacter={wizard.character.isRefiningCharacter}
           protagonistError={wizard.character.protagonistError}
           savedToVaultConfirm={wizard.character.savedToVaultConfirm}
           onManualNameChange={(v) => (wizard.character.manualCharacterName = v)}

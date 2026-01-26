@@ -39,6 +39,7 @@
     expandedSetting: ExpandedSetting | null;
     settingElaborationGuidance: string;
     isExpandingSetting: boolean;
+    isRefiningSetting: boolean;
     settingError: string | null;
     isEditingSetting: boolean;
     selectedScenarioId: string | null;
@@ -73,6 +74,7 @@
     expandedSetting,
     settingElaborationGuidance,
     isExpandingSetting,
+    isRefiningSetting,
     settingError,
     isEditingSetting,
     selectedScenarioId,
@@ -467,12 +469,14 @@
         size="sm"
         class="h-8 w-8 p-0"
         onclick={onExpandFurther}
-        disabled={isExpandingSetting}
+        disabled={isRefiningSetting}
         title="Refine with AI"
       >
-        <Sparkles
-          class="h-3.5 w-3.5 {isExpandingSetting ? 'animate-pulse' : ''}"
-        />
+        {#if isRefiningSetting}
+          <Loader2 class="h-3.5 w-3.5 animate-spin" />
+        {:else}
+          <Sparkles class="h-3.5 w-3.5" />
+        {/if}
       </Button>
     </div>
   </div>

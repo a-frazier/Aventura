@@ -48,7 +48,8 @@
 
     // Loading states
     isGeneratingProtagonist: boolean;
-    isElaboratingCharacter: boolean;
+    isExpandingCharacter: boolean;
+    isRefiningCharacter: boolean;
     protagonistError: string | null;
 
     // Vault states
@@ -85,7 +86,8 @@
     manualCharacterTraits,
     characterElaborationGuidance,
     isGeneratingProtagonist,
-    isElaboratingCharacter,
+    isExpandingCharacter,
+    isRefiningCharacter,
     protagonistError,
     savedToVaultConfirm,
     onManualNameChange,
@@ -113,10 +115,17 @@
   let editBackground = $state("");
   let editMotivation = $state("");
   let editTraits = $state("");
+  let activeElaborationSource = $state<"expand" | "refine" | null>(null);
 
   const hasVaultCharacters = $derived(
     characterVault.isLoaded && characterVault.characters.length > 0,
   );
+
+  $effect(() => {
+    if (!isExpandingCharacter && !isRefiningCharacter) {
+      activeElaborationSource = null;
+    }
+  });
 
   function handleSelectFromVault(character: VaultCharacter) {
     loadedVaultCharacterId = character.id;
@@ -131,7 +140,16 @@
       editDescription = protagonist.description;
       editBackground = protagonist.background ?? "";
       editMotivation = protagonist.motivation ?? "";
-      editTraits = protagonist.traits?.join(", ") ?? "";
+      
+      // Failsafe for traits
+      let safeTraits = "";
+      if (Array.isArray(protagonist.traits)) {
+        safeTraits = protagonist.traits.join(", ");
+      } else if (typeof protagonist.traits === "string") {
+        safeTraits = protagonist.traits;
+      }
+      editTraits = safeTraits;
+      
       isEditingProtagonist = true;
     }
   }
@@ -150,6 +168,16 @@
 
   function handleCancelEdit() {
     isEditingProtagonist = false;
+  }
+
+  function handleElaborate() {
+    activeElaborationSource = "expand";
+    onElaborateCharacter();
+  }
+
+  function handleRefine() {
+    activeElaborationSource = "refine";
+    onElaborateCharacterFurther();
   }
 </script>
 
@@ -474,12 +502,12 @@
                       variant="secondary"
                       size="sm"
                       class="flex-1 gap-2"
-                      onclick={onElaborateCharacter}
-                      disabled={isElaboratingCharacter ||
+                      onclick={handleElaborate}
+                      disabled={isExpandingCharacter ||
                         (!manualCharacterName.trim() &&
                           !manualCharacterDescription.trim())}
                     >
-                      {#if isElaboratingCharacter}
+                      {#if isExpandingCharacter && activeElaborationSource === "expand"}
                         <Loader2 class="h-3.5 w-3.5 animate-spin" />
                         Expanding...
                       {:else}
@@ -600,14 +628,21 @@
               </div>
             {/if}
 
-            {#if protagonist.traits && protagonist.traits.length > 0}
+            {#if protagonist.traits && (Array.isArray(protagonist.traits) ? protagonist.traits.length > 0 : typeof protagonist.traits === 'string')}
               <div class="flex flex-wrap gap-1.5 pt-0.5">
-                {#each protagonist.traits as trait}
+                {#if Array.isArray(protagonist.traits)}
+                  {#each protagonist.traits as trait}
+                    <Badge
+                      variant="secondary"
+                      class="font-normal text-[10px] px-1.5 h-5">{trait}</Badge
+                    >
+                  {/each}
+                {:else if typeof protagonist.traits === "string"}
                   <Badge
-                    variant="secondary"
-                    class="font-normal text-[10px] px-1.5 h-5">{trait}</Badge
-                  >
-                {/each}
+                      variant="secondary"
+                      class="font-normal text-[10px] px-1.5 h-5">{protagonist.traits}</Badge
+                    >
+                {/if}
               </div>
             {/if}
 
@@ -624,15 +659,15 @@
                 variant="outline"
                 size="sm"
                 class="h-7 w-7 p-0"
-                onclick={onElaborateCharacterFurther}
-                disabled={isElaboratingCharacter}
+                onclick={handleRefine}
+                disabled={isRefiningCharacter}
                 title="Refine with AI"
               >
-                <Sparkles
-                  class="h-3 w-3 {isElaboratingCharacter
-                    ? 'animate-pulse'
-                    : ''}"
-                />
+                {#if isRefiningCharacter && activeElaborationSource === "refine"}
+                  <Loader2 class="h-3 w-3 animate-spin" />
+                {:else}
+                  <Sparkles class="h-3 w-3" />
+                {/if}
               </Button>
             </div>
           </Card.Content>

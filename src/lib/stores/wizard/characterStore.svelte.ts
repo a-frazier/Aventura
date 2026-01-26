@@ -20,7 +20,8 @@ export class CharacterStore {
   protagonist = $state<GeneratedProtagonist | null>(null);
   protagonistTranslated = $state<GeneratedProtagonist | null>(null);
   isGeneratingProtagonist = $state(false);
-  isElaboratingCharacter = $state(false);
+  isExpandingCharacter = $state(false);
+  isRefiningCharacter = $state(false);
   protagonistError = $state<string | null>(null);
 
   // Manual Input State
@@ -148,7 +149,7 @@ export class CharacterStore {
     customGenre?: string,
     useCurrentProtagonist: boolean = false
   ) {
-    if (this.isElaboratingCharacter) return;
+    if (this.isExpandingCharacter) return;
 
     const sourceName =
       useCurrentProtagonist && this.protagonist
@@ -185,7 +186,7 @@ export class CharacterStore {
       return;
     }
 
-    this.isElaboratingCharacter = true;
+    this.isExpandingCharacter = true;
     this.protagonistError = null;
 
     try {
@@ -214,7 +215,7 @@ export class CharacterStore {
           ? error.message
           : "Failed to elaborate character";
     } finally {
-      this.isElaboratingCharacter = false;
+      this.isExpandingCharacter = false;
     }
   }
 
@@ -223,9 +224,9 @@ export class CharacterStore {
     selectedGenre: Genre,
     customGenre?: string
   ) {
-    if (!this.protagonist || this.isElaboratingCharacter) return;
+    if (!this.protagonist || this.isRefiningCharacter) return;
 
-    this.isElaboratingCharacter = true;
+    this.isRefiningCharacter = true;
     this.protagonistError = null;
 
     try {
@@ -245,7 +246,7 @@ export class CharacterStore {
       this.protagonistError =
         error instanceof Error ? error.message : "Failed to refine character";
     } finally {
-      this.isElaboratingCharacter = false;
+      this.isRefiningCharacter = false;
     }
   }
 
