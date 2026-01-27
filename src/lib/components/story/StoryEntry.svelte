@@ -172,6 +172,8 @@
   let expandedImageId = $state<string | null>(null);
   let clickedElement = $state<HTMLElement | null>(null);
 
+  const STUCK_THRESHOLD = 5 * 60 * 1000; // 5 minutes
+
   // Branching state
   let isBranching = $state(false);
   let branchName = $state("");
@@ -537,8 +539,47 @@
     const image = embeddedImages.find((img) => img.id === imageId);
     if (!image) return;
 
+    let finalPrompt = prompt;
+
+    // If it's an inline image, try to reconstruct prompt with CURRENT style
+    // This allows style changes in settings to apply when retrying/regenerating
+    if (
+      image.generationMode === "inline" &&
+      image.sourceText &&
+      image.sourceText.startsWith("<pic")
+    ) {
+      // Extract raw prompt from sourceText
+      const match = image.sourceText.match(/prompt=["']([^"']+)["']/i);
+      if (match && match[1]) {
+        const rawPrompt = match[1];
+
+        // Get CURRENT style
+        const imageSettings = settings.systemServicesSettings.imageGeneration;
+        const styleId = imageSettings.styleId;
+        let stylePrompt = "";
+        try {
+          const promptContext = {
+            mode: "adventure" as const,
+            pov: "second" as const,
+            tense: "present" as const,
+            protagonistName: "",
+          };
+          stylePrompt = promptService.getPrompt(styleId, promptContext) || "";
+        } catch {
+          stylePrompt = "Soft cel-shaded anime illustration.";
+        }
+
+        // Reconstruct full prompt
+        finalPrompt = `${rawPrompt}. ${stylePrompt}`;
+        console.log(
+          "[StoryEntry] Reconstructed prompt with new style:",
+          finalPrompt,
+        );
+      }
+    }
+
     // Use centralized retry logic from ImageGenerationService
-    await ImageGenerationService.retryImageGeneration(imageId, prompt);
+    await ImageGenerationService.retryImageGeneration(imageId, finalPrompt);
 
     // Reload images to show updated state
     await loadEmbeddedImages();
@@ -612,17 +653,20 @@
       innerHtml += `<div class="inline-image-placeholder generating">
         <div class="placeholder-spinner"></div>
         <span class="placeholder-status">Generating...</span>
+        <button class="inline-image-retry" data-image-id="${expandedImage.id}">Force Retry</button>
       </div>`;
     } else if (expandedImage.status === "pending") {
       innerHtml += `<div class="inline-image-placeholder pending">
         <div class="placeholder-icon">⏳</div>
         <span class="placeholder-status">Queued...</span>
+        <button class="inline-image-retry" data-image-id="${expandedImage.id}">Force Retry</button>
       </div>`;
     } else if (expandedImage.status === "failed") {
       innerHtml += `<div class="inline-image-placeholder failed">
         <div class="placeholder-icon">⚠️</div>
         <span class="placeholder-status">Generation Failed</span>
         ${expandedImage.errorMessage ? `<span class="placeholder-text">${expandedImage.errorMessage}</span>` : ""}
+        <button class="inline-image-retry" data-image-id="${expandedImage.id}">Retry Generation</button>
       </div>`;
     }
 
@@ -634,6 +678,19 @@
       closeBtn.addEventListener("click", () => {
         expandedImageId = null;
         clickedElement = null;
+      });
+    }
+    // Add retry button handler
+    const retryBtn = container.querySelector(".inline-image-retry");
+    if (retryBtn) {
+      retryBtn.addEventListener("click", async () => {
+        const imageId = retryBtn.getAttribute("data-image-id");
+        if (imageId && expandedImage) {
+          await regenerateInlineImage(imageId, expandedImage.prompt);
+          // The image will reload via the ImageReady subscription or manual reload
+          expandedImageId = null;
+          clickedElement = null;
+        }
       });
     }
 
@@ -671,14 +728,19 @@
     );
 
     // Subscribe to ImageAnalysisFailed events to show error toast
-    const unsubImageAnalysisFailed = eventBus.subscribe<ImageAnalysisFailedEvent>(
-      "ImageAnalysisFailed",
-      (event) => {
-        if (event.entryId === entry.id) {
-          ui.showToast(`Image generation failed: ${event.error}`, "error", 10000);
-        }
-      },
-    );
+    const unsubImageAnalysisFailed =
+      eventBus.subscribe<ImageAnalysisFailedEvent>(
+        "ImageAnalysisFailed",
+        (event) => {
+          if (event.entryId === entry.id) {
+            ui.showToast(
+              `Image generation failed: ${event.error}`,
+              "error",
+              10000,
+            );
+          }
+        },
+      );
 
     // Subscribe to TTSQueued events to auto-play TTS when triggered from ActionInput
     const unsubTTSQueued = eventBus.subscribe<TTSQueuedEvent>(
@@ -1428,6 +1490,35 @@
 
   :global(.failed .placeholder-status) {
     color: var(--color-red-400, #f87171);
+  }
+
+  :global(.inline-image-retry) {
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: var(--accent-600);
+    color: white;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  :global(.inline-image-retry:hover) {
+    background-color: var(--accent-500);
+  }
+
+  :global(.inline-image-stuck-notice) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1rem;
+    background-color: var(--surface-700);
+    border-top: 1px solid var(--surface-600);
+    font-size: 0.875rem;
+    color: var(--surface-300);
   }
 
   /* Inline Image Actions (Overlay) */

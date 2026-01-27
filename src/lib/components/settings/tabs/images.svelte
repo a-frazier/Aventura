@@ -7,7 +7,7 @@
   import * as Select from "$lib/components/ui/select";
   import { Slider } from "$lib/components/ui/slider";
   import { RotateCcw } from "lucide-svelte";
-  import { PollinationsImageProvider } from "$lib/services/ai/image/providers/PollinationsProvider";
+  import { ImageGenerationService } from "$lib/services/ai/image/ImageGenerationService";
   import type { ImageModelInfo } from "$lib/services/ai/image/providers/base";
   import ImageModelSelect from "$lib/components/settings/ImageModelSelect.svelte";
 
@@ -53,12 +53,11 @@
     pollinationsModelsError = null;
 
     try {
-      // Allow loading Pollinations models without an API key
-      const provider = new PollinationsImageProvider(
-        apiKey || undefined,
-        false,
+      // Use service to list models
+      pollinationsModels = await ImageGenerationService.listModels(
+        "pollinations",
+        apiKey,
       );
-      pollinationsModels = await provider.listModels();
     } catch (error) {
       pollinationsModelsError =
         error instanceof Error ? error.message : "Failed to load models";

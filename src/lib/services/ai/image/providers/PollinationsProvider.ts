@@ -37,14 +37,14 @@ const POLLINATIONS_MODELS_ENDPOINT = `${POLLINATIONS_BASE_URL}/image/models`;
 // Default model
 const DEFAULT_MODEL = 'zimage';
 
-// Cache for models list (avoid repeated API calls)
-let modelsCache: ImageModelInfo[] | null = null;
-let modelsCacheTime = 0;
-const MODELS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes (as per plan)
-
 export class PollinationsImageProvider implements ImageProvider {
 	id = 'pollinations';
 	name = 'Pollinations.ai';
+
+	// Cache for models list (avoid repeated API calls across instances)
+	private static modelsCache: ImageModelInfo[] | null = null;
+	private static modelsCacheTime = 0;
+	private static readonly MODELS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 	private apiKey: string;
 	private debug: boolean;
@@ -299,8 +299,8 @@ export class PollinationsImageProvider implements ImageProvider {
 	async listModels(): Promise<ImageModelInfo[]> {
 		// Return cached models if still valid
 		const now = Date.now();
-		if (modelsCache && (now - modelsCacheTime) < MODELS_CACHE_TTL) {
-			return modelsCache;
+		if (PollinationsImageProvider.modelsCache && (now - PollinationsImageProvider.modelsCacheTime) < PollinationsImageProvider.MODELS_CACHE_TTL) {
+			return PollinationsImageProvider.modelsCache;
 		}
 
 		try {
@@ -350,8 +350,8 @@ export class PollinationsImageProvider implements ImageProvider {
 			}));
 
 			// Update cache
-			modelsCache = models;
-			modelsCacheTime = now;
+			PollinationsImageProvider.modelsCache = models;
+			PollinationsImageProvider.modelsCacheTime = now;
 
 			return models;
 		} catch (error) {

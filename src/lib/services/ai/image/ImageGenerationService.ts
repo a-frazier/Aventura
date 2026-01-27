@@ -11,7 +11,7 @@
 
 import type { EmbeddedImage, Character } from '$lib/types';
 import type { OpenAIProvider } from '../core/OpenAIProvider';
-import type { ImageProvider } from './providers/base';
+import type { ImageProvider, ImageModelInfo } from './providers/base';
 import { ImagePromptService, type ImagePromptContext, type ImageableScene } from './ImagePromptService';
 import { NanoGPTImageProvider } from './providers/NanoGPTProvider';
 import { ChutesImageProvider } from './providers/ChutesProvider';
@@ -96,18 +96,41 @@ export class ImageGenerationService {
   /**
    * Create the appropriate image provider based on settings
    */
-  private createImageProvider(): ImageProvider {
+  private static createProviderInstance(provider?: string, apiKey?: string): ImageProvider {
     const imageSettings = settings.systemServicesSettings.imageGeneration;
-    const provider = imageSettings.imageProvider ?? 'nanogpt';
-    const apiKey = ImageGenerationService.getApiKey();
+    const effectiveProvider = provider ?? imageSettings.imageProvider ?? 'nanogpt';
+    const effectiveApiKey = apiKey ?? this.getApiKey();
 
-    if (provider === 'chutes') {
-      return new ChutesImageProvider(apiKey, DEBUG.enabled);
+    if (effectiveProvider === 'chutes') {
+      return new ChutesImageProvider(effectiveApiKey, DEBUG.enabled);
     }
-    if (provider === 'pollinations') {
-      return new PollinationsImageProvider(apiKey, DEBUG.enabled);
+    if (effectiveProvider === 'pollinations') {
+      return new PollinationsImageProvider(effectiveApiKey, DEBUG.enabled);
     }
-    return new NanoGPTImageProvider(apiKey, DEBUG.enabled);
+    return new NanoGPTImageProvider(effectiveApiKey, DEBUG.enabled);
+  }
+
+  /**
+   * List available models for a given provider.
+   */
+  static async listModels(providerId: string, apiKey?: string): Promise<ImageModelInfo[]> {
+    try {
+      const provider = this.createProviderInstance(providerId, apiKey);
+      return await provider.listModels();
+    } catch (error) {
+      log(`Failed to list models for provider ${providerId}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Create the instance-level provider using current settings
+   */
+  private getOrCreateImageProvider(): ImageProvider {
+    if (!this.imageProvider) {
+      this.imageProvider = ImageGenerationService.createProviderInstance();
+    }
+    return this.imageProvider;
   }
 
   /**
@@ -471,14 +494,12 @@ export class ImageGenerationService {
       }
 
       // Create provider if needed
-      if (!this.imageProvider) {
-        this.imageProvider = this.createImageProvider();
-      }
+      const provider = this.getOrCreateImageProvider();
 
       log('Generating portrait', { characterName, model: imageSettings.portraitModel, provider: imageSettings.imageProvider ?? 'nanogpt' });
 
       // Generate portrait using portrait model
-      const response = await this.imageProvider.generateImage({
+      const response = await provider.generateImage({
         prompt,
         model: imageSettings.portraitModel || 'z-image-turbo',
         size: '1024x1024',
@@ -617,19 +638,6 @@ export class ImageGenerationService {
     );
   }
 
-  /**
-   * Create a provider instance for a given provider type.
-   * @private
-   */
-  private static createProviderInstance(provider: string, apiKey: string): ImageProvider {
-    if (provider === 'chutes') {
-      return new ChutesImageProvider(apiKey, DEBUG.enabled);
-    }
-    if (provider === 'pollinations') {
-      return new PollinationsImageProvider(apiKey, DEBUG.enabled);
-    }
-    return new NanoGPTImageProvider(apiKey, DEBUG.enabled);
-  }
 
   /**
    * Generate a single image (runs asynchronously)
@@ -652,9 +660,7 @@ export class ImageGenerationService {
     }
 
     // Create provider if needed
-    if (!this.imageProvider) {
-      this.imageProvider = this.createImageProvider();
-    }
+    const provider = this.getOrCreateImageProvider();
 
     // Use centralized generation logic
     await ImageGenerationService.performImageGeneration(
@@ -663,7 +669,7 @@ export class ImageGenerationService {
       prompt,
       modelOverride || imageSettings.model,
       imageSettings.size,
-      this.imageProvider,
+      provider,
       referenceImageUrls
     );
   }
