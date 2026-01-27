@@ -183,6 +183,16 @@
   let editingImageId = $state<string | null>(null);
   let editingImagePrompt = $state("");
 
+  // Timer for checking stuck images
+  let now = $state(Date.now());
+
+  onMount(() => {
+    const interval = setInterval(() => {
+      now = Date.now();
+    }, 1000);
+    return () => clearInterval(interval);
+  });
+
   // Helper to get which branch a checkpoint belongs to (by checking its last entry's branchId)
   function getCheckpointBranchId(checkpoint: {
     entriesSnapshot: { id: string; branchId?: string | null }[];
@@ -673,16 +683,18 @@
     if (expandedImage.status === "complete" && expandedImage.imageData) {
       innerHtml += `<img src="data:image/png;base64,${expandedImage.imageData}" alt="${expandedImage.sourceText}" class="inline-image-content" />`;
     } else if (expandedImage.status === "generating") {
+      const isStuck = now - expandedImage.createdAt > IMAGE_STUCK_THRESHOLD_MS;
       innerHtml += `<div class="inline-image-placeholder generating">
         <div class="placeholder-spinner"></div>
         <span class="placeholder-status">Generating...</span>
-        <button class="inline-image-retry" data-image-id="${expandedImage.id}">Force Retry</button>
+        ${isStuck ? `<button class="inline-image-retry" data-image-id="${expandedImage.id}">Force Retry</button>` : ''}
       </div>`;
     } else if (expandedImage.status === "pending") {
+      const isStuck = now - expandedImage.createdAt > IMAGE_STUCK_THRESHOLD_MS;
       innerHtml += `<div class="inline-image-placeholder pending">
         <div class="placeholder-icon">⏳</div>
         <span class="placeholder-status">Queued...</span>
-        <button class="inline-image-retry" data-image-id="${expandedImage.id}">Force Retry</button>
+        ${isStuck ? `<button class="inline-image-retry" data-image-id="${expandedImage.id}">Force Retry</button>` : ''}
       </div>`;
     } else if (expandedImage.status === "failed") {
       innerHtml += `<div class="inline-image-placeholder failed">
