@@ -936,13 +936,11 @@
     aria-label="Expanded portrait"
     tabindex="0"
   >
-    <div
-      class="relative max-h-[85vh] max-w-[85vw] shadow-2xl rounded-lg overflow-hidden border border-border"
-    >
+    <div class="relative max-w-sm w-full">
       <img
         src={expandedPortrait.src}
         alt="{expandedPortrait.name} portrait"
-        class="max-h-[85vh] max-w-[85vw] object-contain"
+        class="w-full h-auto rounded-lg shadow-2xl border border-border"
       />
       <Button
         variant="secondary"
