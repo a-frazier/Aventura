@@ -14,6 +14,10 @@
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils/cn";
 
+  // Lazy loading config
+  const INITIAL_BATCH = 50;
+  const LOAD_MORE_BATCH = 50;
+
   interface Props {
     profileId: string | null;
     model: string;
@@ -45,6 +49,8 @@
   // Local state for model search/input
   let open = $state(false);
   let inputValue = $state("");
+  let visibleCount = $state(INITIAL_BATCH);
+  let sentinelEl: HTMLDivElement | null = $state(null);
 
   // Resolve the effective profile ID (with fallback to default)
   // This ensures models are available even if profileId is null
@@ -59,6 +65,43 @@
     if (!profile) return [];
     // Combine fetched and custom models, removing duplicates
     return [...new Set([...profile.fetchedModels, ...profile.customModels])];
+  });
+
+  // Visible models for lazy loading (slice based on current visible count)
+  let visibleModels = $derived(availableModels.slice(0, visibleCount));
+  let hasMoreModels = $derived(visibleCount < availableModels.length);
+
+  // Reset visible count when dropdown opens or search changes
+  $effect(() => {
+    if (open) {
+      visibleCount = INITIAL_BATCH;
+    }
+  });
+
+  // Reset visible count when search input changes
+  $effect(() => {
+    inputValue; // Track dependency
+    visibleCount = INITIAL_BATCH;
+  });
+
+  // IntersectionObserver for lazy loading more models
+  $effect(() => {
+    if (!sentinelEl || !open) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreModels) {
+          visibleCount = Math.min(
+            visibleCount + LOAD_MORE_BATCH,
+            availableModels.length
+          );
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinelEl);
+    return () => observer.disconnect();
   });
 
   // Get selected profile name
@@ -179,7 +222,7 @@
               {/if}
             </Command.Empty>
             <Command.Group>
-              {#each availableModels as modelOption}
+              {#each visibleModels as modelOption}
                 <Command.Item
                   value={modelOption}
                   onSelect={() => {
@@ -208,6 +251,16 @@
                   <Plus class="mr-2 h-4 w-4" />
                   Use "{inputValue}"
                 </Command.Item>
+              {/if}
+
+              <!-- Sentinel for lazy loading -->
+              {#if hasMoreModels}
+                <div
+                  bind:this={sentinelEl}
+                  class="h-8 flex items-center justify-center text-xs text-muted-foreground"
+                >
+                  {availableModels.length - visibleCount} more...
+                </div>
               {/if}
             </Command.Group>
           </Command.List>
