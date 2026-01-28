@@ -84,11 +84,20 @@
   // Auto-scroll to bottom when new entries are added or streaming content changes
   // Use requestAnimationFrame to batch scroll updates and avoid layout thrashing
   let scrollRAF: number | null = null;
+  let prevEntryCount = 0;
 
   $effect(() => {
     // Track both entries and streaming state for scroll
-    const _ = story.entries.length;
+    const currentCount = story.entries.length;
     const __ = ui.streamingContent;
+
+    // Detect if entries were added (vs deleted or unchanged)
+    const wasAdded = currentCount > prevEntryCount;
+    prevEntryCount = currentCount;
+
+    // Only auto-scroll when entries are added, not when deleted
+    // Also scroll during streaming for real-time updates
+    if (!wasAdded && !ui.isStreaming) return;
 
     // Skip auto-scroll if user has scrolled up (persists until next user message)
     if (ui.userScrolledUp) return;
