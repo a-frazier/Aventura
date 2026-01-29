@@ -3,40 +3,34 @@
  *
  * Coordinates AI services for narrative generation, classification, memory, and more.
  *
- * STATUS: PARTIALLY STUBBED - Awaiting SDK migration
- * - generateSuggestions() - WORKING (uses SDK-based SuggestionsService)
- * - All other AI-calling methods - STUBBED
+ * STATUS: PARTIALLY MIGRATED
+ * - streamNarrative(), generateNarrative() - WORKING (uses NarrativeService)
+ * - generateSuggestions() - WORKING (uses SuggestionsService)
+ * - buildTieredContext(), getRelevantLorebookEntries() - WORKING (Tier 1&2)
+ * - Other AI-calling methods - STUBBED (awaiting migration)
  */
 
 import { settings } from '$lib/stores/settings.svelte';
 import { story } from '$lib/stores/story.svelte';
-import { promptService, type PromptContext, type StoryMode, type POV, type Tense } from '$lib/services/prompts';
+import type { PromptContext, StoryMode, POV, Tense } from '$lib/services/prompts';
 import type { ClassificationResult, ClassificationContext } from './generation/ClassifierService';
-import { MemoryService, type ChapterAnalysis, type ChapterSummary, type RetrievalDecision, DEFAULT_MEMORY_CONFIG } from './generation/MemoryService';
+import { MemoryService, type ChapterAnalysis, type ChapterSummary, type RetrievalDecision } from './generation/MemoryService';
 import type { StorySuggestion, SuggestionsResult } from './generation/SuggestionsService';
 import type { ActionChoice, ActionChoicesResult } from './generation/ActionChoicesService';
 import type { StyleReviewResult } from './generation/StyleReviewerService';
-import type { LoreManagementSettings } from './lorebook/LoreManagementService';
-import type { AgenticRetrievalSettings, AgenticRetrievalResult } from './retrieval/AgenticRetrievalService';
-import type { TimelineFillSettings, TimelineFillResult } from './retrieval/TimelineFillService';
-import { ContextBuilder, type ContextResult, type ContextConfig, DEFAULT_CONTEXT_CONFIG } from './generation/ContextBuilder';
+import type { AgenticRetrievalResult } from './retrieval/AgenticRetrievalService';
+import type { TimelineFillResult } from './retrieval/TimelineFillService';
+import { ContextBuilder, type ContextResult, type ContextConfig } from './generation/ContextBuilder';
 import { EntryRetrievalService, type EntryRetrievalResult, type ActivationTracker, getEntryRetrievalConfigFromSettings } from './retrieval/EntryRetrievalService';
 import { ImageGenerationService, type ImageGenerationContext } from './image/ImageGenerationService';
 import { inlineImageService, type InlineImageContext } from './image/InlineImageService';
 import type { TranslationResult, UITranslationItem } from './utils/TranslationService';
-import type { Message, StreamChunk } from './core/types';
+import type { StreamChunk } from './core/types';
 import type { Story, StoryEntry, Character, Location, Item, StoryBeat, Chapter, MemoryConfig, Entry, LoreManagementResult, TimeTracker } from '$lib/types';
-import { createLogger, getContextConfig } from './core/config';
-
-// Import from new modules
+import { createLogger } from './core/config';
 import { serviceFactory } from './core/factory';
-import {
-  formatStoryTime,
-  buildPrimingMessage,
-  buildChapterSummariesBlock,
-  buildSystemPrompt,
-  type WorldStateContext
-} from './prompts/systemBuilder';
+import { NarrativeService } from './generation/NarrativeService';
+import type { WorldStateContext } from './prompts/systemBuilder';
 
 const log = createLogger('AIService');
 
@@ -46,33 +40,67 @@ interface WorldState extends WorldStateContext {
 }
 
 class AIService {
+  private narrativeService: NarrativeService;
+
+  constructor() {
+    this.narrativeService = serviceFactory.createNarrativeService();
+  }
+
   /**
-   * Generate narrative response.
-   * @throws Error - Service not implemented during SDK migration
+   * Generate a complete narrative response (non-streaming).
    */
-  async generateResponse(
+  async generateNarrative(
     entries: StoryEntry[],
     worldState: WorldState,
     story?: Story | null
   ): Promise<string> {
-    throw new Error('AIService.generateResponse() not implemented - awaiting SDK migration');
+    return this.narrativeService.generate(entries, worldState, story);
   }
 
   /**
-   * Stream narrative response.
-   * @throws Error - Service not implemented during SDK migration
+   * Stream a narrative response.
+   * This is the primary method for real-time story generation.
    */
-  async *streamResponse(
+  async *streamNarrative(
     entries: StoryEntry[],
     worldState: WorldState,
-    story?: Story | null,
+    currentStory?: Story | null,
     useTieredContext = true,
     styleReview?: StyleReviewResult | null,
     retrievedChapterContext?: string | null,
     signal?: AbortSignal,
     timelineFillResult?: TimelineFillResult | null
   ): AsyncIterable<StreamChunk> {
-    throw new Error('AIService.streamResponse() not implemented - awaiting SDK migration');
+    log('streamNarrative called', {
+      entriesCount: entries.length,
+      useTieredContext,
+      hasStyleReview: !!styleReview,
+      hasRetrievedContext: !!retrievedChapterContext,
+      hasTimelineFill: !!timelineFillResult,
+    });
+
+    // Build tiered context if requested
+    let tieredContextBlock: string | undefined;
+    if (useTieredContext) {
+      const lastEntry = entries[entries.length - 1];
+      const userInput = lastEntry?.content ?? '';
+      const contextResult = await this.buildTieredContext(
+        worldState,
+        userInput,
+        entries,
+        retrievedChapterContext ?? undefined
+      );
+      tieredContextBlock = contextResult.contextBlock;
+    }
+
+    // Delegate to NarrativeService
+    yield* this.narrativeService.stream(entries, worldState, currentStory, {
+      tieredContextBlock,
+      styleReview,
+      retrievedChapterContext,
+      signal,
+      timelineFillResult,
+    });
   }
 
   /**

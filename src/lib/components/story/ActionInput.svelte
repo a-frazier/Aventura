@@ -954,7 +954,7 @@
           attempt: retryCount + 1,
         });
 
-        for await (const chunk of aiService.streamResponse(
+        for await (const chunk of aiService.streamNarrative(
           story.visibleEntries,
           worldState,
           currentStoryRef,

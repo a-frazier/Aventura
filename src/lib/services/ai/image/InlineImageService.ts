@@ -24,14 +24,9 @@ import { emitImageQueued, emitImageReady } from '$lib/services/events';
 import { normalizeImageDataUrl } from '$lib/utils/image';
 import { extractPicTags, type ParsedPicTag } from '$lib/utils/inlineImageParser';
 import { DEFAULT_FALLBACK_STYLE_PROMPT } from './constants';
+import { createLogger } from '../core/config';
 
-const DEBUG = false;
-
-function log(...args: any[]) {
-  if (DEBUG) {
-    console.log('[InlineImageGen]', ...args);
-  }
-}
+const log = createLogger('InlineImageGen');
 
 export interface InlineImageContext {
   storyId: string;

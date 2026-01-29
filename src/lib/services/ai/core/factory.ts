@@ -7,6 +7,7 @@
  */
 
 import { settings } from '$lib/stores/settings.svelte';
+import { NarrativeService } from '../generation/NarrativeService';
 import { ClassifierService } from '../generation/ClassifierService';
 import { MemoryService } from '../generation/MemoryService';
 import { SuggestionsService } from '../generation/SuggestionsService';
@@ -26,6 +27,15 @@ import { TranslationService } from '../utils/TranslationService';
  */
 export class ServiceFactory {
   // ===== Service Instance Creators =====
+
+  /**
+   * Create a narrative service instance.
+   * This is the core service for story generation.
+   * Uses main narrative profile directly (no preset needed).
+   */
+  createNarrativeService(): NarrativeService {
+    return new NarrativeService();
+  }
 
   /**
    * Create a classifier service instance.

@@ -623,17 +623,6 @@ export type ProviderType =
   | 'anthropic'    // @ai-sdk/anthropic
   | 'google';      // @ai-sdk/google (future)
 
-// Provider capabilities (for UI/logic decisions)
-export interface ProviderCapabilities {
-  supportsStructuredOutput: boolean;
-  supportsToolCalling: boolean;
-  supportsStreaming: boolean;
-  supportsReasoning: boolean;
-  reasoningFormat: 'effort' | 'reasoningEffort' | 'thinking' | null;
-  hasProviderRouting: boolean;
-  supportsCustomBaseUrl: boolean;
-}
-
 // API Profile for saving OpenAI-compatible endpoint configurations
 export interface APIProfile {
   id: string;                 // UUID

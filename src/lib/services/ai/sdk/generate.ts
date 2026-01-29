@@ -158,6 +158,60 @@ function resolveConfig(presetId: string): ResolvedConfig {
   return { preset, profile, providerType: profile.providerType, model, providerOptions };
 }
 
+/**
+ * Resolved config for main narrative profile.
+ * Uses settings from apiSettings directly.
+ */
+interface NarrativeConfig {
+  profile: APIProfile;
+  providerType: ProviderType;
+  model: ReturnType<ReturnType<typeof createProviderFromProfile>['chat']>;
+  temperature: number;
+  maxTokens: number;
+  providerOptions: ProviderOptions | undefined;
+}
+
+/**
+ * Resolve config from the main narrative profile.
+ * Uses apiSettings.defaultModel, temperature, and maxTokens directly.
+ */
+function resolveNarrativeConfig(): NarrativeConfig {
+  const profile = settings.getMainNarrativeProfile();
+
+  if (!profile) {
+    throw new Error('Main narrative profile not configured. Please set up an API profile in Settings.');
+  }
+
+  const provider = createProviderFromProfile(profile);
+  const modelId = settings.apiSettings.defaultModel;
+  const model = provider.chat(modelId);
+
+  // Build a minimal preset-like object for provider options
+  const narrativePreset: GenerationPreset = {
+    id: '_narrative',
+    name: 'Narrative',
+    description: 'Main narrative generation',
+    profileId: profile.id,
+    model: modelId,
+    temperature: settings.apiSettings.temperature,
+    maxTokens: settings.apiSettings.maxTokens,
+    reasoningEffort: settings.apiSettings.reasoningEffort ?? 'off',
+    providerOnly: [],
+    manualBody: ''
+  };
+
+  const providerOptions = buildProviderOptions(narrativePreset, profile.providerType);
+
+  return {
+    profile,
+    providerType: profile.providerType,
+    model,
+    temperature: settings.apiSettings.temperature,
+    maxTokens: settings.apiSettings.maxTokens,
+    providerOptions
+  };
+}
+
 // ============================================================================
 // Generate Functions
 // ============================================================================
@@ -249,4 +303,61 @@ export function streamStructured<T extends z.ZodType>(options: GenerateObjectOpt
     providerOptions,
     abortSignal: signal,
   });
+}
+
+// ============================================================================
+// Narrative Generation Functions (Main Profile)
+// ============================================================================
+
+interface NarrativeGenerateOptions {
+  /** System prompt */
+  system: string;
+  /** User prompt */
+  prompt: string;
+  /** Optional abort signal for cancellation */
+  signal?: AbortSignal;
+}
+
+/**
+ * Stream narrative text using the main narrative profile.
+ * Uses apiSettings.defaultModel, temperature, and maxTokens.
+ */
+export function streamNarrative(options: NarrativeGenerateOptions) {
+  const { system, prompt, signal } = options;
+  const { providerType, model, temperature, maxTokens, providerOptions } = resolveNarrativeConfig();
+
+  log('streamNarrative', { model: settings.apiSettings.defaultModel, providerType });
+
+  return streamText({
+    model,
+    system,
+    prompt,
+    temperature,
+    maxOutputTokens: maxTokens,
+    providerOptions,
+    abortSignal: signal,
+  });
+}
+
+/**
+ * Generate narrative text using the main narrative profile.
+ * Uses apiSettings.defaultModel, temperature, and maxTokens.
+ */
+export async function generateNarrative(options: NarrativeGenerateOptions): Promise<string> {
+  const { system, prompt, signal } = options;
+  const { providerType, model, temperature, maxTokens, providerOptions } = resolveNarrativeConfig();
+
+  log('generateNarrative', { model: settings.apiSettings.defaultModel, providerType });
+
+  const { text } = await generateText({
+    model,
+    system,
+    prompt,
+    temperature,
+    maxOutputTokens: maxTokens,
+    providerOptions,
+    abortSignal: signal,
+  });
+
+  return text;
 }

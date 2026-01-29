@@ -3,6 +3,7 @@
  *
  * Story narrative generation services:
  * - AIService: Main orchestrator for all AI operations
+ * - NarrativeService: Core narrative generation
  * - ClassifierService: Extract world state from narrative
  * - MemoryService: Chapter summarization and memory retrieval
  * - SuggestionsService: Story direction suggestions
@@ -13,6 +14,13 @@
 
 // Main orchestrator (exports singleton instance)
 export { aiService } from '../index';
+
+// Narrative generation
+export {
+  NarrativeService,
+  type NarrativeWorldState,
+  type NarrativeOptions,
+} from './NarrativeService';
 
 // Classification
 export {
